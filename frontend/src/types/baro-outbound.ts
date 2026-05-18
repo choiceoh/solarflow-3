@@ -18,8 +18,8 @@ export interface BaroOutboundItem {
   warehouse_id?: string;
   warehouse_name?: string;
   usage_category: UsageCategory;
-  customer_id?: string;
-  customer_name?: string;
+  // customer_id 는 outbounds 직접 컬럼이 아니라 BARO 응답에 미포함. 창고팀 작업은
+  // site_name/site_address 기준이라 충분. 거래처 매핑은 별도 후속 PR.
   site_name?: string;
   site_address?: string;
   spare_qty?: number;

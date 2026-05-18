@@ -59,7 +59,6 @@ type baroOutboundRow struct {
 	WarehouseID           *string `json:"warehouse_id"`
 	WarehouseName         *string `json:"warehouse_name"`
 	UsageCategory         string  `json:"usage_category"`
-	CustomerID            *string `json:"customer_id"`
 	SiteName              *string `json:"site_name"`
 	SiteAddress           *string `json:"site_address"`
 	SpareQty              *int    `json:"spare_qty"`
@@ -80,11 +79,6 @@ type baroOutboundCompanyRow struct {
 	CompanyName string `json:"company_name"`
 }
 
-type baroOutboundPartnerRow struct {
-	PartnerID   string `json:"partner_id"`
-	PartnerName string `json:"partner_name"`
-}
-
 type baroOutboundProductSpecRow struct {
 	ProductID string `json:"product_id"`
 	SpecWP    *int   `json:"spec_wp"`
@@ -97,8 +91,11 @@ type baroOutboundProductSpecRow struct {
 //   - company_id : 출고 법인(탑솔라/디원/화신) 필터.
 //   - usage_category : sale/sale_spare/construction/... 필터.
 func (h *BaroOutboundHandler) List(w http.ResponseWriter, r *http.Request) {
+	// customer_id 는 outbounds 컬럼이 아님 (sale 또는 order 를 거쳐 도달). BARO 보드는 거래처 대신
+	// site_name/site_address 를 노출 — 창고팀 피킹/배송 작업은 현장명 기준이라 충분. 거래처 join
+	// 이 필요하면 sales.outbound_id → partners.customer_id 별도 룩업으로 후속 PR.
 	const cols = "outbound_id, outbound_date, company_id, product_id, product_code, product_name, " +
-		"quantity, capacity_kw, warehouse_id, warehouse_name, usage_category, customer_id, " +
+		"quantity, capacity_kw, warehouse_id, warehouse_name, usage_category, " +
 		"site_name, site_address, spare_qty, order_number, group_trade, target_company_id, " +
 		"target_company_name, erp_outbound_no, status, " +
 		"tx_statement_ready, inspection_request_sent, approval_requested, tax_invoice_issued"
@@ -138,7 +135,6 @@ func (h *BaroOutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	companyNames := h.baroOutboundCompanyNames()
-	customerNames := h.baroOutboundCustomerNames(rows)
 	productSpecs := h.baroOutboundProductSpecs(rows)
 
 	items := make([]BaroOutboundItem, 0, len(rows))
@@ -156,7 +152,6 @@ func (h *BaroOutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 			WarehouseID:           row.WarehouseID,
 			WarehouseName:         row.WarehouseName,
 			UsageCategory:         row.UsageCategory,
-			CustomerID:            row.CustomerID,
 			SiteName:              row.SiteName,
 			SiteAddress:           row.SiteAddress,
 			SpareQty:              row.SpareQty,
@@ -170,9 +165,6 @@ func (h *BaroOutboundHandler) List(w http.ResponseWriter, r *http.Request) {
 			InspectionRequestSent: row.InspectionRequestSent,
 			ApprovalRequested:     row.ApprovalRequested,
 			TaxInvoiceIssued:      row.TaxInvoiceIssued,
-		}
-		if row.CustomerID != nil {
-			item.CustomerName = stringPtrFromMap(customerNames, *row.CustomerID)
 		}
 		if spec, ok := productSpecs[row.ProductID]; ok {
 			item.SpecWP = spec
@@ -201,42 +193,6 @@ func (h *BaroOutboundHandler) baroOutboundCompanyNames() map[string]string {
 	out := make(map[string]string, len(rows))
 	for _, row := range rows {
 		out[row.CompanyID] = row.CompanyName
-	}
-	return out
-}
-
-// baroOutboundCustomerNames — 응답에 등장하는 customer_id 만 골라 partners 룩업.
-// outbounds 행 수만큼 partner_id 가 있는데 보통 같은 거래처가 반복되므로 set 으로 압축.
-func (h *BaroOutboundHandler) baroOutboundCustomerNames(rows []baroOutboundRow) map[string]string {
-	idSet := make(map[string]struct{}, len(rows))
-	for _, row := range rows {
-		if row.CustomerID != nil && *row.CustomerID != "" {
-			idSet[*row.CustomerID] = struct{}{}
-		}
-	}
-	if len(idSet) == 0 {
-		return map[string]string{}
-	}
-	ids := make([]string, 0, len(idSet))
-	for id := range idSet {
-		ids = append(ids, id)
-	}
-	data, _, err := h.DB.From("partners").
-		Select("partner_id, partner_name", "exact", false).
-		In("partner_id", ids).
-		Execute()
-	if err != nil {
-		log.Printf("[BARO 출고 거래처 룩업 실패] %v", err)
-		return map[string]string{}
-	}
-	var partners []baroOutboundPartnerRow
-	if err := json.Unmarshal(data, &partners); err != nil {
-		log.Printf("[BARO 출고 거래처 룩업 디코딩 실패] %v", err)
-		return map[string]string{}
-	}
-	out := make(map[string]string, len(partners))
-	for _, p := range partners {
-		out[p.PartnerID] = p.PartnerName
 	}
 	return out
 }

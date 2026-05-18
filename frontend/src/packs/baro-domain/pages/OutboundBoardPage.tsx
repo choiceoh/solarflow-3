@@ -43,7 +43,6 @@ function matchesSearch(row: BaroOutboundItem, keyword: string): boolean {
   if (!q) return true;
   const tokens = q.split(/\s+/).filter(Boolean);
   const haystack = [
-    row.customer_name,
     row.site_name,
     row.site_address,
     row.product_code,
@@ -136,15 +135,14 @@ export default function OutboundBoardPage() {
       ),
     },
     {
-      key: 'customer_name',
-      label: '거래처 · 현장',
+      key: 'site_name',
+      label: '현장',
       sortable: true,
       render: (row) => (
         <span className="flex min-w-[220px] flex-col">
-          <span className="font-medium">{row.customer_name ?? '—'}</span>
+          <span className="font-medium">{row.site_name ?? '—'}</span>
           <span className="truncate text-xs text-muted-foreground">
-            {row.site_name ?? '—'}
-            {row.site_address ? ` · ${row.site_address}` : ''}
+            {row.site_address ?? '—'}
           </span>
         </span>
       ),
@@ -250,7 +248,7 @@ export default function OutboundBoardPage() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="거래처/현장/품번/주소 검색"
+            placeholder="현장/주소/품번/창고 검색"
             className="h-8 w-[280px] pl-7 text-[12px]"
           />
         </div>
