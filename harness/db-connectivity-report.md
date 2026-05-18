@@ -437,8 +437,10 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 | #894 | 155_backfill_2024_po_lc_bl | 24년 PO/LC 백필 — raw 수입진행상황 2024 시트 (PO 2 + LC 19, BL 1 skip) |
 | 본 PR | 159 | 24년 BL 메타 enrichment — raw 의 ETD/ETA/통관/포워더로 기존 BL UPDATE (48행) |
 | 본 PR | 166 + 167 | DB 정합성 검증 회귀 2종 정정 — inbound triplet 50건 (M126 잔재), outbounds.spare_qty 589건 (M097-100/M137 잔재). 상세: `harness/integrity-2026-05-18-report.md` |
+| 본 PR | 168 | v_product_qty_balance 정본 마이그 이전 (이전엔 `scripts/fix_data_integrity.py:150` 의 런타임 CREATE VIEW). 본문 변경 없음, schema_migrations 추적만 확보. |
+| 본 PR | 169 | v_integrity_check 의 '면장 사후신고' baseline 43→86 (M164 패턴). substring 충돌 방지 anchor + 멱등 가드. |
 
-머지 순서: 마이그 번호순 (111 → 167)
+머지 순서: 마이그 번호순 (111 → 169)
 
 **M155 상세**: raw 자료 (`수입진행상황(module)-2025년도.xlsx::2024 시트`) 에서 24년 PO 11건 / LC 24건 / BL 62건 추출 후 DB 와 차이 비교. 신규 INSERT 후보 중 메타데이터 충분한 것만 적용:
 - PO 2건: `기산태양광 1차~4차`, `CSI-TO240730` (캐나디안솔라 제조사)
