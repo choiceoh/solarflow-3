@@ -355,6 +355,32 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 - 대응 (마이그 131): `orders_dashboard.trend24` binning 을 § 4.6 처럼 첫 매출 발행일 폴백으로 변경.
   `unit_price_ma15_180` 과 `totals.recent_30` 은 의도적으로 그대로 — "최근 30일에 입력된 수주" 의미 보존.
 
+### 6.12 inbounds triplet 무결성 — M126 의 vat-without-total 패턴
+
+- M126_inbounds_supply_derive 의 3-step UPDATE 가 `total_amount IS NULL OR = 0` 가드 때문에
+  이미 `total = supply` 로 잘못 적재된 행들의 total 을 갱신 못 함.
+- 결과: `supply = total, vat = round(supply × 0.1)` 의 triplet 불일치 (2026-05-18 기준 50건).
+- 신규 인서트는 같은 함정에 빠지지 않게 import 코드가 erp_total 을 그대로 옮길 것 — `total_amount = COALESCE(erp_total, supply + vat)`.
+- 정정: M166_fix_inbound_supply_vat_total (2 분기 — KRW 30건 total 정정, USD 20건 vat 0 정정).
+
+### 6.13 outbounds.spare_qty 가 fifo_matches 분리 후 stale
+
+- M097-100 (`_fifo_*_audit_20260512`) + M137 (implicit order + construction 전환) 가
+  fifo_matches 의 `상품판매(스페어)` 행을 sibling outbound 로 옮길 때 `outbounds.spare_qty`
+  컬럼은 갱신 안 됨. 결과: 원본 outbound 에 phantom spare_qty 잔재.
+- 검증식 `fifo allocated 합 ≠ outbound qty + spare` 가 589건 fail (2026-05-18). 전부 under,
+  fm_sum = quantity, spare_qty 가 실제로는 다른 outbound 에 옮겨감.
+- 정정: M167_fix_outbound_spare_qty_from_fifo — `spare_qty := GREATEST(0, fm_sum - quantity)`.
+- 정본 규칙: spare 수량은 fifo_matches 의 `usage_category_raw='상품판매(스페어)'` 합이 정본.
+  outbounds.spare_qty 는 derived view 로 옮기는 게 안전 (별도 follow-up).
+
+### 6.14 `v_product_qty_balance` 는 마이그 정본 없음
+
+- 정의 위치: `scripts/fix_data_integrity.py:150` 의 `CREATE OR REPLACE VIEW` (런타임 실행).
+- schema_migrations 에 기록 안 됨 → 다음 codegen 시 view 가 없으면 누락 가능.
+- 마이그로 옮기는 follow-up 필요. 정의는 `initial_stock` (`inventory_movements.movement_subtype='기초'`)
+  + `inbound_sum` + `outbound_sum (status=active)` 을 활성 product 별로 LEFT JOIN.
+
 ---
 
 ## 7. 핵심 RPC / 함수
@@ -410,8 +436,9 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 | #? | 131 | orders_dashboard.trend24 binning → 첫 매출 발행일 폴백 |
 | #894 | 155_backfill_2024_po_lc_bl | 24년 PO/LC 백필 — raw 수입진행상황 2024 시트 (PO 2 + LC 19, BL 1 skip) |
 | 본 PR | 159 | 24년 BL 메타 enrichment — raw 의 ETD/ETA/통관/포워더로 기존 BL UPDATE (48행) |
+| 본 PR | 166 + 167 | DB 정합성 검증 회귀 2종 정정 — inbound triplet 50건 (M126 잔재), outbounds.spare_qty 589건 (M097-100/M137 잔재). 상세: `harness/integrity-2026-05-18-report.md` |
 
-머지 순서: 마이그 번호순 (111 → 159)
+머지 순서: 마이그 번호순 (111 → 167)
 
 **M155 상세**: raw 자료 (`수입진행상황(module)-2025년도.xlsx::2024 시트`) 에서 24년 PO 11건 / LC 24건 / BL 62건 추출 후 DB 와 차이 비교. 신규 INSERT 후보 중 메타데이터 충분한 것만 적용:
 - PO 2건: `기산태양광 1차~4차`, `CSI-TO240730` (캐나디안솔라 제조사)
