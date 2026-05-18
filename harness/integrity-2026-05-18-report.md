@@ -5,9 +5,11 @@
 | # | 검증 | 현재 | 자동 정정 | 마이그 |
 |---|---|---|---|---|
 | 1 | `inbounds: supply+vat=total` | 50 | 가능 | M166 |
-| 2 | `v_product_qty_balance: 출고>입고+초기 1.05` | 12 | **불가능 (데이터 갭)** | — |
-| 3 | `v_product_qty_balance: balance < 0` | 13 | **불가능 (데이터 갭)** | — |
+| 2 | `v_product_qty_balance: 출고>입고+초기 1.05` | 12 | **운영자 dedup** | — |
+| 3 | `v_product_qty_balance: balance < 0` | 13 | **운영자 dedup** | — |
 | 4 | `fifo allocated 합 ≠ outbound qty + spare` | 589 | 가능 | M167 |
+| 5 | `면장 사후신고 (low)` baseline 노후 | 86 (43→) | 가능 | M169 |
+| — | `v_product_qty_balance` 마이그 정본 누락 | — | 가능 | M168 |
 
 ---
 
@@ -159,10 +161,79 @@ M091 의 `outbounds.negative_spare_qty` 검증은 `spare_qty < 0` 만 보지만,
 
 ---
 
+## 13-product 후속 조사 (2026-05-18 follow-up)
+
+운영자 자동 정정 가능성을 확인하기 위해 prod 데이터로 두 가설 검증.
+
+### 가설 1 — outbound 중복 (date/qty 동일 그룹)
+
+음수재고 product 별로 `(product_id, outbound_date, quantity)` 동일 그룹의 dup 행을 1순위로 남기고 나머지를 제거하면 balance 어디까지 회복되는가:
+
+| product_code | 현 balance | dedup 후 balance | 평가 |
+|---|---:|---:|---|
+| JKM635N-78HL4-BDV-S | -239,019 | **-93,101** | 절반 회복, 잔존 |
+| LR7-72HYD-650M | -34,216 | -32,661 | 거의 변동 없음 |
+| LR7-72HYD-655M | -7,091 | -6,278 | 거의 변동 없음 |
+| Q.TRON XL-G2.7 BFG CFP2 625 | -3,253 | -1,662 | 절반 회복, 잔존 |
+| HS500XC-GHE20 | -2,058 | -2,058 | dedup 0건 (가설 2 케이스) |
+| CS7N-655MB-AG | -889 | -889 | dedup 0건 |
+| CS7N-660MB-AG | -730 | -730 | dedup 0건 |
+| LR8-66HYD-650M | -655 | -655 | dedup 0건 |
+| LG285S1W-L4 | -285 | -285 | dedup 0건 |
+| **JAM72D42-640LB** | **-203** | **+126** | **dedup 으로 해소** ✓ |
+| HIS-T640NJ-ES | -156 | -156 | dedup 0건 |
+| CS6U-320P | -24 | -24 | dedup 0건 |
+| Q.PEAK L-G4.4 365 | -1 | -1 | dedup 0건 |
+
+JAM72D42-640LB 만 dedup 으로 완전 해소. JKM 과 Q.TRON 은 부분 해소.
+
+### 가설 2 — '월말 erp_no NULL' 중복 (HS500XC 패턴)
+
+가설 1 에서 0건이지만 실제로는 중복인 케이스. HS500XC-GHE20 의 outbound 타임라인:
+
+| date | qty | erp_outbound_no |
+|---|---:|---|
+| 2025-03-14 | 480 | IS2503000294 |
+| 2025-03-20 | 288 | IS2503000293 |
+| **2025-03-31** | **288** | **(none)** ← #2 중복 의심 |
+| **2025-03-31** | **480** | **(none)** ← #1 중복 의심 |
+| 2025-04-28 | 994 | IS2504000353 |
+| **2025-04-30** | **994** | **(none)** ← #5 중복 의심 |
+| 2025-05-01 | 296 | IS2505000256 |
+| **2025-05-31** | **296** | **(none)** ← #7 중복 의심 |
+
+월말(30/31) + erp_no NULL + 같은 달의 erp_no 있는 행과 qty 일치 → 별도 채널 (예: 수불 시트) 에서 같은 출고를 재입력한 것으로 추정. 합 288+480+994+296 = **2058 EA = 정확히 shortage**.
+
+13 product 별 '월말 erp_no NULL' 수량:
+
+| product_code | 월말 NULL qty | 현 balance |
+|---|---:|---:|
+| HS500XC-GHE20 | 2,058 | -2,058 (= 정확히 일치) |
+| CS7N-660MB-AG | 1,058 | -730 |
+| JKM635N-78HL4-BDV-S | 231,528 | -239,019 |
+| Q.TRON XL-G2.7 BFG CFP2 625 | 12,507 | -3,253 |
+| HIS-T640NJ-ES | 156 | -156 (정확히 일치) |
+| LG285S1W-L4 | 299 | -285 |
+| Q.PEAK L-G4.4 365 | 1 | -1 (정확히 일치) |
+| CS6U-320P | 56 | -24 |
+| 나머지 5종 | 0 ~ 327 | 다양 |
+
+7종이 '월말 NULL' 패턴으로 설명됨. 단, **자동 dedup 마이그는 위험**:
+- 같은 (product, date, qty) 가 진짜 두 번 출고된 케이스 (예: 같은 거래처에 같은 모델 두 번)
+- 월말 NULL 이 진짜 ERP 별도 채널에서 들어온 정당한 출고일 가능성
+
+→ 운영자가 product 별로 ERP 원본 (`수불 시트` + `출고 시트`) 을 대조해 dedup 후보 outbound 를 직접 cancel 또는 inactive 처리하는 것이 정공법. 본 보고서가 그 작업의 입력 자료.
+
+### Cluster B (면장 없음) 의 추가 관찰
+
+HS500XC-GHE20 의 outbound 는 source_payload 에 `erp_code` 가 없지만 (출고 시트 path), inbound 에 `erp_model='HS500XC-GHE20', erp_code='M-HS0500-04'` 로 2,050 EA 가 들어와 있음. 즉 inbound 와 outbound 모두 같은 product_id 를 가리키고 있어 코드 매핑 문제는 아님. shortage 2,058 EA 는 위 dedup 후보 4건이 정확히 설명.
+
+---
+
 ## 후속 작업 (이 PR 범위 밖)
 
-1. **inbound 행 백필** (Cluster A 4종 + Cluster B 9종) — 운영자가 ERP 원본 재확인
-2. **`v_product_qty_balance` 정본 마이그** — 현재 `scripts/fix_data_integrity.py` 가 런타임에 CREATE OR REPLACE. 마이그로 옮겨야 schema_migrations 추적 가능
+1. **운영자 dedup 결정** (위 7종 + JAM72D42) — ERP 원본 대조 후 중복 outbound 를 status='cancelled' 또는 isactive=false 처리
+2. **inbound 행 백필** — LR7-72HYD-650M/655M 처럼 dedup 으로도 안 풀리는 4종은 면장→inbound 변환의 부분 실패 가능. 면장 declared qty 가 outbound 를 충분히 커버하는 경우 ERP 입고 시트 reimport
 3. **M126 가드 강화** — 향후 신규 inbound 가 같은 패턴으로 들어올 때 차단하려면 `CHECK (abs(supply+vat-total) <= 5)` constraint 검토
 
 ---
@@ -170,16 +241,19 @@ M091 의 `outbounds.negative_spare_qty` 검증은 `spare_qty < 0` 만 보지만,
 ## 검증 (운영 반영 후)
 
 ```sql
-SELECT name, actual FROM v_integrity_check
-WHERE name IN (
-  'inbounds: supply+vat=total',
-  'v_product_qty_balance: 출고>입고+초기 1.05',
-  'v_product_qty_balance: balance < 0',
-  'fifo allocated 합 ≠ outbound qty + spare'
-);
--- 기대:
---   inbounds: supply+vat=total                     → 0   (M166)
---   fifo allocated 합 ≠ outbound qty + spare       → 0   (M167)
---   v_product_qty_balance: 출고>입고+초기 1.05     → 12  (변동 없음, 운영자 검토 대기)
---   v_product_qty_balance: balance < 0             → 13  (변동 없음, 운영자 검토 대기)
+SELECT name, baseline, actual, status FROM v_integrity_check
+WHERE status='fail'
+ORDER BY severity, name;
+-- 기대 (M166 + M167 + M168 + M169 적용 후):
+--   inbounds: supply+vat=total                     → 0       (M166)
+--   fifo allocated 합 ≠ outbound qty + spare       → 0       (M167)
+--   v_product_qty_balance: 출고>입고+초기 1.05     → 12      (변동 없음, 운영자 dedup 대기)
+--   v_product_qty_balance: balance < 0             → 13      (변동 없음, 운영자 dedup 대기)
+--   면장 사후신고 (declaration > arrival)          → pass    (M169: baseline 43→86)
 ```
+
+## 마이그 멱등성 메모
+
+- **M168** `v_product_qty_balance_canonical`: 본문이 prod 의 현재 view 정의와 동일. CREATE OR REPLACE 라 멱등.
+- **M169** `integrity_baseline_decl_after_arrival_refresh`: 이미 baseline=86 인 경우 no-op (match 카운트 분기). 정상 적용 시 정확히 1 매치 보장, 그 외엔 RAISE EXCEPTION.
+  - ⚠️ 본 마이그는 **운영 DB 에 수동 적용된 상태로 출발**한다 (조사 중 실수로 commit 모드 실행됨, 멱등 가드가 cron-deploy 재실행 시 안전하게 no-op 처리). schema_migrations 에는 cron-deploy 가 정상 적용 후 등록.
