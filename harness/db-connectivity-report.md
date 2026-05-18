@@ -408,9 +408,10 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 | #822 | 117 | bl_shipments 4 컬럼 백필 (decl_no/inv/xr/arrival) |
 | #824 | 118 | outbounds.site_name 보강 (17건) |
 | #? | 131 | orders_dashboard.trend24 binning → 첫 매출 발행일 폴백 |
-| 본 PR | 155 | 24년 PO/LC 백필 — raw 수입진행상황 2024 시트 기반 (PO 2 + LC 19, BL 1 skip) |
+| #894 | 155_backfill_2024_po_lc_bl | 24년 PO/LC 백필 — raw 수입진행상황 2024 시트 (PO 2 + LC 19, BL 1 skip) |
+| 본 PR | 159 | 24년 BL 메타 enrichment — raw 의 ETD/ETA/통관/포워더로 기존 BL UPDATE (48행) |
 
-머지 순서: 마이그 번호순 (111 → 155)
+머지 순서: 마이그 번호순 (111 → 159)
 
 **M155 상세**: raw 자료 (`수입진행상황(module)-2025년도.xlsx::2024 시트`) 에서 24년 PO 11건 / LC 24건 / BL 62건 추출 후 DB 와 차이 비교. 신규 INSERT 후보 중 메타데이터 충분한 것만 적용:
 - PO 2건: `기산태양광 1차~4차`, `CSI-TO240730` (캐나디안솔라 제조사)
@@ -418,6 +419,22 @@ WHERE fm.outbound_date BETWEEN '2025-01-01' AND '2025-12-31'
 - SKIP: `무안햇빛솔라` (제조사 미상), `M12MK2410NU00025` (amount_usd NULL), BL 1건 (기존 DB 중복)
 - 멱등 INSERT: `po_number` / `lc_number+po_id` / `bl_number` 가 unique key. memo `M155%` 로 추적 가능
 - 빌더: `scripts/gen_m155_backfill_2024.py` (raw JSON → SQL 자동 생성)
+
+**M159 상세**: raw 24년 distinct BL 74개 추출 → DB 매칭 61개 → DB NULL 인 필드만 raw 값으로 채움.
+- 48 BL UPDATE (ETD/ETA/actual_arrival/forwarder)
+- 38 필드 충돌 (DB ≠ raw) → skip + `m159_diff_report.txt` 보존, 운영자 검토 대상
+- 13 BL 변경 없음 (이미 다 채워짐)
+- 13 BL DB 에 없음 (M155 BL skip 분 + raw only) — 별도 작업 필요
+- 멱등 UPDATE: `WHERE field IS NULL` 가드 + `COALESCE(field, raw)`. 재실행 시 `UPDATE 0` (검증됨)
+- memo 누적: `' [M159: raw 24년 enrich]'` 추가 (기존 memo 보존)
+- 빌더: `scripts/gen_m159_bl_enrichment.py` (raw 추출 + DB 조회 + diff → SQL)
+
+**Dry-run 헬퍼 (M155 사고 재발 방지)**: `scripts/dry_run_migration.sh <NNN>`
+- 마이그 파일에서 단독 `BEGIN;` / `COMMIT;` / `ROLLBACK;` 라인 sed strip
+- 외부 트랜잭션으로 감싸서 ssh+psql 실행
+- 기본 ROLLBACK (`--apply` 플래그 필요)
+- 표준 검증 SELECT (`memo LIKE '%M<NNN>%'` 행수, PO/LC/BL/decl/cost/out/inb/incid)
+- `--extra-check '<SQL>'` 로 임시 추가 검증 가능
 
 ---
 
@@ -456,7 +473,13 @@ ssh choiceoh@100.105.145.6 "set -a; source /home/choiceoh/공개/solarflow-3/eng
    - PostgreSQL function 변경은 RPC 의존 코드 동시 변경 필수
    - 외부 API (Deneb) 영향 컬럼 변경은 사전 확인
 
-4. **PR 절차**:
+4. **Dry-run 절차**: 반드시 `scripts/dry_run_migration.sh <NNN>` 사용
+   - `psql \i` 가 SQL 안의 `BEGIN/COMMIT` 을 그대로 실행해서 외부 ROLLBACK 무력화 (M155 사고)
+   - 헬퍼는 단독 라인 BEGIN/COMMIT/ROLLBACK 만 sed strip 후 외부 트랜잭션 감쌈
+   - 기본 ROLLBACK, `--apply` 플래그로만 실제 적용
+   - 출력에서 `INSERT 0 N` / `UPDATE N` 값 확인 후 적용
+
+5. **PR 절차**:
    - 새 브랜치 `ostcode/<설명>` (main 기반)
    - 마이그 + dry-run 결과 PR 본문에 포함
    - 머지 후 cron-deploy 가 자동 적용 (`scripts/cron-deploy.sh`)

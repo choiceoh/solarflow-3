@@ -525,6 +525,7 @@ B/L No / 선적 / 입항 / 포워더 → bl_shipments (이미 사용 중)
 | M130 | cost_details.incidental_cost 부대비용 백필 | D (회계 전표) |
 | M131 | BL별 운송료/작업료 청구서 9개 정밀 보강 | J (BL별 청구서) |
 | **M155** | **24년 PO 2 + LC 19 백필 (DB 24년 PO/LC 누락분)** | **E1.2024 시트 raw 직접 파싱** |
+| **M159** | **24년 BL 메타 enrichment 48행 (ETD/ETA/통관/포워더, NULL 가드)** | **E1.2024 시트 raw + DB 매칭** |
 
 **다음 백필 후보**:
 
