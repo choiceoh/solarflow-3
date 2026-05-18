@@ -742,7 +742,7 @@ func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[s
 	}
 	if wattageW > 0 {
 		body["spec_wp"] = wattageW
-		body["wattage_kw"] = float64(wattageW) / 1000.0
+		// D-160: wattage_kw 는 BEFORE INSERT trigger 가 spec_wp 기반 자동 채움.
 	}
 	data, _, err := h.DB.From("products").Insert(body, false, "", "", "").Execute()
 	if err != nil {
@@ -757,6 +757,8 @@ func (h *ExternalSyncHandler) autoRegisterProduct(rawCode string, mfgIndex map[s
 }
 
 // D-059 PR 12: 신규 product 등록 + 추론한 wattage 반환 (capacity_kw 자동 계산용)
+// D-160: DB 에는 spec_wp 만 INSERT, wattage_kw 는 trigger 가 채움.
+// 반환되는 wattage_kw 는 호출자 (capacity_kw 자동 계산용) 가 그대로 사용.
 func (h *ExternalSyncHandler) autoRegisterProductWithWattage(rawCode string, mfgIndex map[string]string) (string, float64, error) {
 	mfgID, wattageW := inferProductMeta(rawCode, mfgIndex)
 	code := rawCode
@@ -779,7 +781,6 @@ func (h *ExternalSyncHandler) autoRegisterProductWithWattage(rawCode string, mfg
 	if wattageW > 0 {
 		body["spec_wp"] = wattageW
 		wattageKW = float64(wattageW) / 1000.0
-		body["wattage_kw"] = wattageKW
 	}
 	data, _, err := h.DB.From("products").Insert(body, false, "", "", "").Execute()
 	if err != nil {

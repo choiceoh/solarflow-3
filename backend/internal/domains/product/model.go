@@ -74,12 +74,12 @@ type ManufacturerSummary struct {
 
 // CreateProductRequest — 품번 등록 시 클라이언트가 보내는 데이터
 // 비유: "모듈 규격 등록 신청서" — 필수 사양을 빠짐없이 기재해야 접수
+// D-160: wattage_kw 는 spec_wp 기반 trigger 자동 채움 — 클라이언트는 보내지 않는다.
 type CreateProductRequest struct {
 	ProductCode           string   `json:"product_code"`
 	ProductName           string   `json:"product_name"`
 	ManufacturerID        string   `json:"manufacturer_id"`
 	SpecWP                int      `json:"spec_wp"`
-	WattageKW             float64  `json:"wattage_kw"`
 	ModuleWidthMM         int      `json:"module_width_mm"`
 	ModuleHeightMM        int      `json:"module_height_mm"`
 	ModuleDepthMM         *int     `json:"module_depth_mm"`
@@ -118,9 +118,6 @@ func (req *CreateProductRequest) Validate() string {
 	if req.SpecWP <= 0 {
 		return "spec_wp는 양수여야 합니다"
 	}
-	if req.WattageKW <= 0 {
-		return "wattage_kw는 양수여야 합니다"
-	}
 	if req.ModuleWidthMM <= 0 {
 		return "module_width_mm는 양수여야 합니다"
 	}
@@ -152,12 +149,12 @@ func (req *CreateProductRequest) Validate() string {
 
 // UpdateProductRequest — 품번 수정 시 클라이언트가 보내는 데이터
 // 비유: "모듈 규격 변경 신청서" — 바꾸고 싶은 사양만 적어서 제출
+// D-160: wattage_kw 는 trigger 자동 채움 — 클라이언트는 보내지 않는다.
 type UpdateProductRequest struct {
 	ProductCode           *string  `json:"product_code,omitempty"`
 	ProductName           *string  `json:"product_name,omitempty"`
 	ManufacturerID        *string  `json:"manufacturer_id,omitempty"`
 	SpecWP                *int     `json:"spec_wp,omitempty"`
-	WattageKW             *float64 `json:"wattage_kw,omitempty"`
 	ModuleWidthMM         *int     `json:"module_width_mm,omitempty"`
 	ModuleHeightMM        *int     `json:"module_height_mm,omitempty"`
 	ModuleDepthMM         *int     `json:"module_depth_mm,omitempty"`
@@ -199,9 +196,6 @@ func (req *UpdateProductRequest) Validate() string {
 	}
 	if req.SpecWP != nil && *req.SpecWP <= 0 {
 		return "spec_wp는 양수여야 합니다"
-	}
-	if req.WattageKW != nil && *req.WattageKW <= 0 {
-		return "wattage_kw는 양수여야 합니다"
 	}
 	if req.ModuleWidthMM != nil && *req.ModuleWidthMM <= 0 {
 		return "module_width_mm는 양수여야 합니다"
