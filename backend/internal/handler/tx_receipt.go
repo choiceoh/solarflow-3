@@ -109,10 +109,75 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, receipts)
 }
 
+// baroOwnsReceiptOr404 — BARO 토큰일 때 receipt 의 소유권 검증 (D-108).
+// receipts 는 company_id 직접 컬럼이 있어 단순 조회.
+func (h *ReceiptHandler) baroOwnsReceiptOr404(w http.ResponseWriter, r *http.Request, receiptID string) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		log.Printf("[BARO 수금 소유권 검증] BaroCompany resolver 미주입")
+		response.RespondError(w, http.StatusNotFound, "수금을 찾을 수 없습니다")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		log.Printf("[BARO 수금 소유권 검증] BR 법인 룩업 실패: %v", err)
+		response.RespondError(w, http.StatusNotFound, "수금을 찾을 수 없습니다")
+		return false
+	}
+	data, _, err := h.DB.From("receipts").
+		Select("company_id", "exact", false).
+		Eq("receipt_id", receiptID).
+		Limit(1, "").
+		Execute()
+	if err != nil {
+		log.Printf("[BARO 수금 소유권 검증] DB 조회 실패: %v", err)
+		response.RespondError(w, http.StatusInternalServerError, "소유권 검증 실패")
+		return false
+	}
+	var rows []struct {
+		CompanyID string `json:"company_id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 || rows[0].CompanyID != baroID {
+		response.RespondError(w, http.StatusNotFound, "수금을 찾을 수 없습니다")
+		return false
+	}
+	return true
+}
+
+// baroEnforceCompanyOnReceiptCreate — BARO 토큰이 수금을 등록할 때 company_id 를 BR 로 강제.
+func (h *ReceiptHandler) baroEnforceCompanyOnReceiptCreate(w http.ResponseWriter, r *http.Request, req *model.CreateReceiptRequest) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "BR 법인 마스터 확인 불가")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "BR 법인 마스터 확인 불가")
+		return false
+	}
+	if req.CompanyID == nil || *req.CompanyID != baroID {
+		prev := ""
+		if req.CompanyID != nil {
+			prev = *req.CompanyID
+		}
+		log.Printf("[BARO 수금 생성] company_id 강제 교체 %q -> %q", prev, baroID)
+		req.CompanyID = &baroID
+	}
+	return true
+}
+
 // GetByID — GET /api/v1/receipts/{id} — 수금 상세 조회
 // 비유: 특정 수금 전표를 꺼내 자세히 보는 것
 func (h *ReceiptHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsReceiptOr404(w, r, id) {
+		return
+	}
 
 	data, _, err := h.DB.From("receipts").
 		Select("*", "exact", false).
@@ -210,6 +275,9 @@ func (h *ReceiptHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
 	}
+	if !h.baroEnforceCompanyOnReceiptCreate(w, r, &req) {
+		return
+	}
 
 	if msg := req.Validate(); msg != "" {
 		response.RespondError(w, http.StatusBadRequest, msg)
@@ -252,6 +320,9 @@ func (h *ReceiptHandler) Create(w http.ResponseWriter, r *http.Request) {
 // 비유: 기존 수금 전표의 내용을 수정하는 것
 func (h *ReceiptHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsReceiptOr404(w, r, id) {
+		return
+	}
 
 	var req model.UpdateReceiptRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -294,6 +365,9 @@ func (h *ReceiptHandler) Update(w http.ResponseWriter, r *http.Request) {
 // 비유: 수금 전표를 파기하는 것 — 연결된 매칭(receipt_matches)을 먼저 정리
 func (h *ReceiptHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsReceiptOr404(w, r, id) {
+		return
+	}
 
 	// 매칭 먼저 삭제 (FK 제약)
 	if _, _, derr := h.DB.From("receipt_matches").

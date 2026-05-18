@@ -17,6 +17,11 @@ import (
 // 원가/매출/이익이 어떻게 계산됐는지 라인별로 보여준다 (D-064 PR 26 결과 활용).
 func (h *OutboundHandler) FifoMatches(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// BARO 격리 (D-108): BARO 토큰이 module outbound 의 원가 매칭을 보지 못하게 차단.
+	// 사용자가 직접 지적한 노출 경로 — outbound 가 BR 소유가 아니면 404.
+	if !h.baroOwnsOutboundOr404(w, r, id) {
+		return
+	}
 
 	data, _, err := h.DB.From("fifo_matches").
 		Select("*", "exact", false).
