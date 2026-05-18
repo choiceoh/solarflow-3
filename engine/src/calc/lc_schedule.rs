@@ -180,7 +180,9 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
     let bank_rows = sqlx::query_as::<_, BankRow>(
         r#"
         SELECT b.bank_id, b.bank_name, b.lc_limit_usd::float8 as lc_limit_usd,
-               COALESCE(SUM(CASE WHEN COALESCE(lc.repaid, false) = false AND lc.status <> 'cancelled'
+               COALESCE(SUM(CASE WHEN COALESCE(lc.repaid, false) = false
+                                  AND lc.status <> 'cancelled'
+                                  AND (lc.maturity_date IS NULL OR lc.maturity_date >= CURRENT_DATE)
                            THEN lc.amount_usd ELSE 0 END), 0)::float8 as used_usd
         FROM banks b
         LEFT JOIN lc_records lc ON lc.bank_id = b.bank_id
