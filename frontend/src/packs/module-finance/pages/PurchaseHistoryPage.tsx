@@ -198,7 +198,13 @@ function buildChainAuditProfile(chain: Chain, src: EventSources, events: Timelin
   const linkedLCs = src.lcs.filter((lc) => poIds.has(lc.po_id));
   const linkedBLs = src.bls.filter((bl) => bl.po_id && poIds.has(bl.po_id));
   const linkedTTs = src.tts.filter((tt) => poIds.has(tt.po_id));
-  const openLCs = linkedLCs.filter((lc) => !lc.repaid && lc.status !== 'cancelled');
+  const _today = new Date().toISOString().slice(0, 10);
+  const openLCs = linkedLCs.filter(
+    (lc) =>
+      !lc.repaid &&
+      lc.status !== 'cancelled' &&
+      (!lc.maturity_date || lc.maturity_date >= _today),
+  );
   const plannedTTs = linkedTTs.filter((tt) => tt.status === 'planned');
   const activeBLs = linkedBLs.filter((bl) => bl.status !== 'completed' && bl.status !== 'erp_done');
   const latestEventDate = events[0]?.date;
