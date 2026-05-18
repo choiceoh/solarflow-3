@@ -36,7 +36,7 @@ export const ALL_PACKS: readonly Pack[] = [
  *
  * 'home' 은 라벨 없는 진입 그룹. 나머지는 라벨 그대로.
  */
-const NAV_GROUP_ORDER: NavGroupKey[] = ['home', '구매', '판매', '현황', '도구'];
+const NAV_GROUP_ORDER: NavGroupKey[] = ['home', '구매', '창고/물류', '판매', '현황', '도구'];
 
 /**
  * buildNavGroups — pack 들의 NAV items 를 합쳐 사이드바 그룹 구조로 변환.
