@@ -43,6 +43,7 @@ export interface BLShipment {
   etd?: string
   eta?: string
   actual_arrival?: string
+  lc_maturity_date?: string  // BL 단위 LC 어음 만기일 (B/L date + 90일). 자사 LC 한도 점유 판정의 정본.
   port?: string
   forwarder?: string
   warehouse_id?: string

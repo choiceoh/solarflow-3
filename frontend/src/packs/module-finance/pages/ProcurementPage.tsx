@@ -428,14 +428,25 @@ export default function ProcurementPage() {
     lcSummary?.opened_count ??
     lcRows.filter((lc) => lc.status === "opened" || lc.status === "docs_received").length
   const lcTotalCount = lcSummary?.total ?? lcRows.length
-  const lcMaturitySoon = useMemo(
-    () =>
-      lcRows.filter((lc) => {
-        const d = daysUntil(lc.maturity_date)
-        return d != null && d >= 0 && d <= 30 && !lc.repaid && lc.status !== "cancelled"
-      }),
-    [lcRows],
-  )
+  // 만기 알림 (M160): LC 의 만기는 BL 단위 (`bl_shipments.lc_maturity_date` = B/L date + 90일).
+  // LC 의 "임박 만기" = 연결 BL 중 가장 이른 미래 만기가 30일 이내.
+  const lcMaturitySoon = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const earliestBlMaturityByLc = new Map<string, string>()
+    for (const bl of blRows) {
+      if (!bl.lc_id || !bl.lc_maturity_date) continue
+      if (bl.lc_maturity_date < today) continue
+      const prev = earliestBlMaturityByLc.get(bl.lc_id)
+      if (!prev || bl.lc_maturity_date < prev) earliestBlMaturityByLc.set(bl.lc_id, bl.lc_maturity_date)
+    }
+    return lcRows.filter((lc) => {
+      if (lc.repaid || lc.status === "cancelled") return false
+      const m = earliestBlMaturityByLc.get(lc.lc_id)
+      if (!m) return false
+      const d = daysUntil(m)
+      return d != null && d >= 0 && d <= 30
+    })
+  }, [lcRows, blRows])
   const lcMaturitySoonCount = lcSummary?.maturity_soon_count ?? lcMaturitySoon.length
   const blActiveCount =
     blSummary?.active_count ??
