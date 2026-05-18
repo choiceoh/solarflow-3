@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchAllPaginated, fetchWithAuth } from '@/lib/api';
 import { useAppStore } from '@/stores/appStore';
 import { fetchCalc, companyParams, companyQueryUrl } from '@/lib/companyUtils';
 import { useListQuery, useDetailQuery } from '@/lib/queryHelpers';
@@ -8,6 +8,7 @@ import type { LimitChange, LCLimitTimeline, LCMaturityAlert, LCFeeCalc, BankLimi
 import type { Bank } from '@/types/masters';
 import type { LCRecord } from '@/types/procurement';
 import type { Company } from '@/types/masters';
+import type { BLShipment } from '@/types/inbound';
 
 export interface BankLimitGroup {
   company_id: string;
@@ -80,25 +81,35 @@ const COMPANY_DISPLAY_ORDER: Record<string, number> = {
 /**
  * useAllBankLimitGroups — 모든 활성 법인의 은행별 한도 현황을 Go API에서 직접 집계.
  * 은행이 0개인 활성 법인도 빈 카드로 노출 (등록 유도 목적).
- * 실행금액(= 한도 점유) = 미상환 + 미취소 + 만기 미경과.
- *   재경실 자동 상환 룰 (M159): 만기 지나면 LC 가 자동 상환된 것으로 간주.
+ *
+ * 한도 점유 판정 (M160, M142 모델 준수):
+ *   PO 1개 → LC 1개 → BL 여러 개 (평균 spread 10일). LC 1행에 만기 단일값 표현 불가
+ *   → 만기는 `bl_shipments.lc_maturity_date` (B/L date + 90일) 에 BL 단위로 보관.
+ *
+ * 한도 점유 = 미상환 + 미취소 + EXISTS(BL where lc_maturity_date >= today).
+ *   BL 미연결 LC = 데이터 갭 (2024년 LC 21건 등) 으로 간주, 자동 상환 처리.
+ *   재경실 룰: 만기 지난 BL 은 자동 상환 → 한도 복귀.
  */
 export function useAllBankLimitGroups() {
   const q = useListQuery<BankLimitGroup>(
     ['bank-limit-groups'],
     async () => {
-      const [banks, lcs, companies] = await Promise.all([
+      const [banks, lcs, companies, bls] = await Promise.all([
         fetchWithAuth<Bank[]>('/api/v1/banks').catch(() => [] as Bank[]),
         fetchWithAuth<LCRecord[]>('/api/v1/lcs').catch(() => [] as LCRecord[]),
         fetchWithAuth<Company[]>('/api/v1/companies').catch(() => [] as Company[]),
+        fetchAllPaginated<BLShipment>('/api/v1/bls', '').catch(() => [] as BLShipment[]),
       ]);
 
       const today = new Date().toISOString().slice(0, 10);
+      const lcsWithFutureBl = new Set<string>();
+      for (const bl of bls ?? []) {
+        if (bl.lc_id && bl.lc_maturity_date && bl.lc_maturity_date >= today) {
+          lcsWithFutureBl.add(bl.lc_id);
+        }
+      }
       const activeLcs = (lcs ?? []).filter(
-        (l) =>
-          !l.repaid &&
-          l.status !== 'cancelled' &&
-          (!l.maturity_date || l.maturity_date >= today),
+        (l) => !l.repaid && l.status !== 'cancelled' && lcsWithFutureBl.has(l.lc_id),
       );
       const usedByBank: Record<string, number> = {};
       activeLcs.forEach((l) => {

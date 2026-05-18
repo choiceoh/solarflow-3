@@ -199,11 +199,12 @@ function buildChainAuditProfile(chain: Chain, src: EventSources, events: Timelin
   const linkedBLs = src.bls.filter((bl) => bl.po_id && poIds.has(bl.po_id));
   const linkedTTs = src.tts.filter((tt) => poIds.has(tt.po_id));
   const _today = new Date().toISOString().slice(0, 10);
+  // 한도 점유 판정 (M160): 미상환·미취소 + 연결 BL 중 미래 만기 BL 존재.
+  const _lcsWithFutureBl = new Set(
+    linkedBLs.filter((bl) => bl.lc_id && bl.lc_maturity_date && bl.lc_maturity_date >= _today).map((bl) => bl.lc_id!),
+  );
   const openLCs = linkedLCs.filter(
-    (lc) =>
-      !lc.repaid &&
-      lc.status !== 'cancelled' &&
-      (!lc.maturity_date || lc.maturity_date >= _today),
+    (lc) => !lc.repaid && lc.status !== 'cancelled' && _lcsWithFutureBl.has(lc.lc_id),
   );
   const plannedTTs = linkedTTs.filter((tt) => tt.status === 'planned');
   const activeBLs = linkedBLs.filter((bl) => bl.status !== 'completed' && bl.status !== 'erp_done');
