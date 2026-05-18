@@ -76,6 +76,7 @@ const SalesSummaryPage = lazy(() => import('@/packs/baro-domain/pages/SalesSumma
 const InverterGuidePage = lazy(() => import('@/packs/baro-domain/pages/InverterGuidePage'));
 const ShipmentNoticePage = lazy(() => import('@/packs/baro-domain/pages/ShipmentNoticePage'));
 const IncomingBoardPage = lazy(() => import('@/packs/baro-domain/pages/IncomingBoardPage'));
+const OutboundBoardPage = lazy(() => import('@/packs/baro-domain/pages/OutboundBoardPage'));
 const BaroPurchaseHistoryPage = lazy(() => import('@/packs/baro-domain/pages/BaroPurchaseHistoryPage'));
 const GroupPurchaseRequestPage = lazy(() => import('@/packs/baro-domain/pages/GroupPurchaseRequestPage'));
 const CallbackRecommendPage = lazy(() => import('@/packs/baro-domain/pages/CallbackRecommendPage'));
@@ -169,6 +170,7 @@ export const ROUTES: RouteSpec[] = [
   { path: '/baro/inverter-guide', element: InverterGuidePage },
   { path: '/baro/shipment-notice', element: ShipmentNoticePage },
   { path: '/baro/incoming', element: IncomingBoardPage },
+  { path: '/baro/outbound', element: OutboundBoardPage },
   { path: '/baro/purchase-history', element: BaroPurchaseHistoryPage, roles: ['admin', 'operator', 'executive'] },
   { path: '/baro/group-purchase', element: GroupPurchaseRequestPage, roles: ['admin', 'operator'] },
   { path: '/baro/callback-recommend', element: CallbackRecommendPage },

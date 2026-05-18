@@ -1,8 +1,12 @@
 package po
 
 import (
+	"slices"
+
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/domains/product"
 	"solarflow-backend/internal/model"
+	"solarflow-backend/internal/validation"
 )
 
 // PurchaseOrder — 발주/계약 정보를 담는 구조체
@@ -77,30 +81,11 @@ type TTSummary struct {
 	Status    *string  `json:"status"`
 }
 
-// 허용되는 contract_type 값 (D-086: spot/frame 2종으로 단순화)
-// 독점 여부는 별도(메모 접두사 또는 향후 is_exclusive 컬럼)로 분리
-// 기존 general/exclusive/annual/annual_frame/half_year_frame은 레거시 읽기 호환용
-var validContractTypes = map[string]bool{
-	"spot":            true,
-	"frame":           true,
-	"annual_frame":    true, // legacy
-	"half_year_frame": true, // legacy
-	"general":         true, // legacy
-	"exclusive":       true, // legacy
-	"annual":          true, // legacy
-}
-
-// 허용되는 status 값
-// in_progress: LC 1건 이상 개설 시 자동 전환 (shipping 대체)
-// shipping: 레거시 호환용 — 신규 등록 불가, 읽기만 허용
-var validPOStatuses = map[string]bool{
-	"draft":       true,
-	"contracted":  true,
-	"in_progress": true,
-	"completed":   true,
-	"cancelled":   true,
-	"shipping":    true, // legacy — 기존 데이터 호환용
-}
+// 허용 값 정본은 dbschema 가 자동 생성:
+//   - contract_type → dbschema.PurchaseOrdersContractTypeValues (CHECK 7개: spot/frame/general/exclusive/annual/annual_frame/half_year_frame)
+//   - status        → dbschema.PurchaseOrdersStatusValues (CHECK 6개: draft/contracted/in_progress/shipping/completed/cancelled)
+// 이전엔 validContractTypes/validPOStatuses 손코딩 → DB CHECK 와 드리프트 위험.
+// 비고: 'shipping' 은 레거시 호환용 — 신규 등록 불가, 읽기만 허용 (DB CHECK 에는 포함).
 
 // CreatePurchaseOrderRequest — 발주 등록 시 클라이언트가 보내는 데이터
 // 비유: "발주 계약 신청서" — 법인, 제조사, 계약 유형을 필수 기재
@@ -134,8 +119,8 @@ func (req *CreatePurchaseOrderRequest) Validate() string {
 	if req.ContractType == "" {
 		return "contract_type은 필수 항목입니다"
 	}
-	if !validContractTypes[req.ContractType] {
-		return "contract_type은 \"spot\", \"annual_frame\", \"half_year_frame\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.PurchaseOrdersContractTypeValues, req.ContractType) {
+		return "contract_type은 " + validation.FormatAllowedValues(dbschema.PurchaseOrdersContractTypeValues)
 	}
 	if req.CompanyID == "all" {
 		return "company_id가 'all'일 수 없습니다 — 단일 법인을 선택해주세요"
@@ -143,8 +128,8 @@ func (req *CreatePurchaseOrderRequest) Validate() string {
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
-	if !validPOStatuses[req.Status] {
-		return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\", \"cancelled\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.PurchaseOrdersStatusValues, req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.PurchaseOrdersStatusValues)
 	}
 	if req.TotalQty != nil && *req.TotalQty <= 0 {
 		return "total_qty는 양수여야 합니다"
@@ -229,13 +214,13 @@ func (req *UpdatePurchaseOrderRequest) Validate() string {
 		return "manufacturer_id는 빈 값으로 변경할 수 없습니다"
 	}
 	if req.ContractType != nil {
-		if !validContractTypes[*req.ContractType] {
-			return "contract_type은 \"general\", \"exclusive\", \"annual\", \"spot\" 중 하나여야 합니다"
+		if !slices.Contains(dbschema.PurchaseOrdersContractTypeValues, *req.ContractType) {
+			return "contract_type은 " + validation.FormatAllowedValues(dbschema.PurchaseOrdersContractTypeValues)
 		}
 	}
 	if req.Status != nil {
-		if !validPOStatuses[*req.Status] {
-			return "status는 \"draft\", \"contracted\", \"in_progress\", \"completed\", \"cancelled\" 중 하나여야 합니다"
+		if !slices.Contains(dbschema.PurchaseOrdersStatusValues, *req.Status) {
+			return "status는 " + validation.FormatAllowedValues(dbschema.PurchaseOrdersStatusValues)
 		}
 	}
 	if req.TotalQty != nil && *req.TotalQty <= 0 {

@@ -10,6 +10,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
@@ -55,16 +56,16 @@ func (h *PartnerPriceBookHandler) List(w http.ResponseWriter, r *http.Request) {
 		Select("*", "exact", false)
 
 	if partnerID := r.URL.Query().Get("partner_id"); partnerID != "" {
-		query = query.Eq("partner_id", partnerID)
+		query = query.Eq(dbschema.PartnerPriceBookColPartnerId, partnerID)
 	}
 	if productID := r.URL.Query().Get("product_id"); productID != "" {
-		query = query.Eq("product_id", productID)
+		query = query.Eq(dbschema.PartnerPriceBookColProductId, productID)
 	}
 
 	data, _, err := query.
-		Order("partner_id", &postgrest.OrderOpts{Ascending: true}).
-		Order("product_id", &postgrest.OrderOpts{Ascending: true}).
-		Order("effective_from", &postgrest.OrderOpts{Ascending: false}).
+		Order(dbschema.PartnerPriceBookColPartnerId, &postgrest.OrderOpts{Ascending: true}).
+		Order(dbschema.PartnerPriceBookColProductId, &postgrest.OrderOpts{Ascending: true}).
+		Order(dbschema.PartnerPriceBookColEffectiveFrom, &postgrest.OrderOpts{Ascending: false}).
 		Execute()
 	if err != nil {
 		log.Printf("[거래처 단가표 목록 조회 실패] %v", err)

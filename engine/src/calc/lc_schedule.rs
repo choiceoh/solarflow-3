@@ -180,7 +180,7 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
     let bank_rows = sqlx::query_as::<_, BankRow>(
         r#"
         SELECT b.bank_id, b.bank_name, b.lc_limit_usd::float8 as lc_limit_usd,
-               COALESCE(SUM(CASE WHEN lc.status IN ('opened', 'docs_received')
+               COALESCE(SUM(CASE WHEN COALESCE(lc.repaid, false) = false AND lc.status <> 'cancelled'
                            THEN lc.amount_usd ELSE 0 END), 0)::float8 as used_usd
         FROM banks b
         LEFT JOIN lc_records lc ON lc.bank_id = b.bank_id
@@ -199,7 +199,7 @@ pub async fn calculate_limit_timeline(pool: &PgPool, req: &LcLimitTimelineReques
                lc.maturity_date, lc.bank_id, po.po_number
         FROM lc_records lc
         LEFT JOIN purchase_orders po ON lc.po_id = po.po_id
-        WHERE lc.status IN ('opened', 'docs_received')
+        WHERE COALESCE(lc.repaid, false) = false AND lc.status <> 'cancelled'
           AND lc.maturity_date > CURRENT_DATE
           AND lc.maturity_date <= CURRENT_DATE + INTERVAL '1 month' * $1
           AND lc.company_id = ANY($2::uuid[])
@@ -310,7 +310,7 @@ pub async fn get_maturity_alerts(pool: &PgPool, req: &LcMaturityAlertRequest) ->
         JOIN banks b ON lc.bank_id = b.bank_id
         JOIN companies c ON lc.company_id = c.company_id
         LEFT JOIN purchase_orders po ON lc.po_id = po.po_id
-        WHERE lc.status IN ('opened', 'docs_received')
+        WHERE COALESCE(lc.repaid, false) = false AND lc.status <> 'cancelled'
           AND lc.maturity_date BETWEEN CURRENT_DATE AND CURRENT_DATE + $1 * INTERVAL '1 day'
           AND lc.company_id = ANY($2::uuid[])
         ORDER BY lc.maturity_date ASC

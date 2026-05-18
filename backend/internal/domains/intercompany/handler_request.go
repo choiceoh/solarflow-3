@@ -11,6 +11,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
@@ -70,11 +71,11 @@ func (h *IntercompanyRequestHandler) Mine(w http.ResponseWriter, r *http.Request
 	}
 	q := h.DB.From("intercompany_requests").
 		Select("*", "exact", false).
-		Eq("requester_company_id", requesterID)
+		Eq(dbschema.IntercompanyRequestsColRequesterCompanyId, requesterID)
 	if status := r.URL.Query().Get("status"); status != "" {
-		q = q.Eq("status", status)
+		q = q.Eq(dbschema.IntercompanyRequestsColStatus, status)
 	}
-	data, _, err := q.Order("created_at", &postgrest.OrderOpts{Ascending: false}).Execute()
+	data, _, err := q.Order(dbschema.IntercompanyRequestsColCreatedAt, &postgrest.OrderOpts{Ascending: false}).Execute()
 	if err != nil {
 		log.Printf("[BARO 매입요청 내 목록 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "매입 요청 조회에 실패했습니다")
@@ -99,11 +100,11 @@ func (h *IntercompanyRequestHandler) Inbox(w http.ResponseWriter, r *http.Reques
 	}
 	q := h.DB.From("intercompany_requests").
 		Select("*", "exact", false).
-		Eq("target_company_id", targetID)
+		Eq(dbschema.IntercompanyRequestsColTargetCompanyId, targetID)
 	if status := r.URL.Query().Get("status"); status != "" {
-		q = q.Eq("status", status)
+		q = q.Eq(dbschema.IntercompanyRequestsColStatus, status)
 	}
-	data, _, err := q.Order("created_at", &postgrest.OrderOpts{Ascending: false}).Execute()
+	data, _, err := q.Order(dbschema.IntercompanyRequestsColCreatedAt, &postgrest.OrderOpts{Ascending: false}).Execute()
 	if err != nil {
 		log.Printf("[BARO 매입요청 inbox 실패] %v", err)
 		response.RespondError(w, http.StatusInternalServerError, "매입 요청 inbox 조회에 실패했습니다")

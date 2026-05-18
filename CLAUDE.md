@@ -16,8 +16,9 @@
 4. harness/SolarFlow_설계문서_통합판.md — 유일한 설계 정본
 5. harness/DECISIONS.md — 설계 판단 기록 (왜 이렇게 했는지)
 6. **harness/db-connectivity-report.md — DB 스키마/카탈로그/함정/카드/FK 매트릭스 (DB·SQL·마이그 작업 전 필독)**
-7. **harness/data-sources.md — 외부 자료(엑셀/회계/발주 아카이브) → DB 매핑 카탈로그 (백필·정합·갭 작업 전 필독)**
-8. 할당된 TASK 파일 — 새 TASK는 `harness/TASK_TEMPLATE.md` 기준
+7. **harness/dbschema-system.md — DB 정본 → Go/TS 타입 자동 생성 시스템 가이드 (PostgREST 핸들러·frontend 타입 작업 전 필독)**
+8. **harness/data-sources.md — 외부 자료(엑셀/회계/발주 아카이브) → DB 매핑 카탈로그 (백필·정합·갭 작업 전 필독)**
+9. 할당된 TASK 파일 — 새 TASK는 `harness/TASK_TEMPLATE.md` 기준
 
 ## 도메인별 인덱스 (테넌트 한정 작업 시)
 변경 작업이 한쪽 사이트에만 적용된다면 해당 도메인 인덱스부터 보세요 — 활성 메뉴, 관련 결정(`D-YYYYMMDD-HHMMSS` 또는 기존 순번형 ID), `*Only` 미들웨어 적용 라우트가 한 페이지에 정리돼 있습니다.

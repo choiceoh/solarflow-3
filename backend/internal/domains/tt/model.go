@@ -1,6 +1,12 @@
 package tt
 
-import "unicode/utf8"
+import (
+	"slices"
+	"unicode/utf8"
+
+	"solarflow-backend/internal/dbschema"
+	"solarflow-backend/internal/validation"
+)
 
 // TTRemittance — TT(전신송금) 정보를 담는 구조체
 // 비유: "TT 송금 전표" — 언제, 얼마를, 어떤 목적으로 송금했는지 기록
@@ -35,11 +41,7 @@ type TTManufacturerSummary struct {
 	NameKR string `json:"name_kr"`
 }
 
-// 허용되는 TT status 값
-var validTTStatuses = map[string]bool{
-	"planned":   true,
-	"completed": true,
-}
+// 허용 값 정본: dbschema.TtRemittancesStatusValues (CHECK 2개: planned/completed).
 
 // CreateTTRequest — TT 등록 시 클라이언트가 보내는 데이터
 // 비유: "TT 송금 신청서" — PO, 송금액, 상태를 필수 기재
@@ -67,8 +69,8 @@ func (req *CreateTTRequest) Validate() string {
 	if req.Status == "" {
 		return "status는 필수 항목입니다"
 	}
-	if !validTTStatuses[req.Status] {
-		return "status는 \"planned\", \"completed\" 중 하나여야 합니다"
+	if !slices.Contains(dbschema.TtRemittancesStatusValues, req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.TtRemittancesStatusValues)
 	}
 	if req.AmountKRW != nil && *req.AmountKRW <= 0 {
 		return "amount_krw는 양수여야 합니다"
@@ -104,8 +106,8 @@ func (req *UpdateTTRequest) Validate() string {
 	if req.AmountUSD != nil && *req.AmountUSD <= 0 {
 		return "amount_usd는 양수여야 합니다"
 	}
-	if req.Status != nil && !validTTStatuses[*req.Status] {
-		return "status는 \"planned\", \"completed\" 중 하나여야 합니다"
+	if req.Status != nil && !slices.Contains(dbschema.TtRemittancesStatusValues, *req.Status) {
+		return "status는 " + validation.FormatAllowedValues(dbschema.TtRemittancesStatusValues)
 	}
 	if req.AmountKRW != nil && *req.AmountKRW <= 0 {
 		return "amount_krw는 양수여야 합니다"

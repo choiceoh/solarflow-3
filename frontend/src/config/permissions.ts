@@ -47,6 +47,7 @@ export type MenuKey =
   | 'baro_credit'           // BARO: 거래처 미수금/한도 보드
   | 'baro_price_book'       // BARO: 거래처별 단가표
   | 'baro_incoming'         // BARO: 입고예정/ETA 보드
+  | 'baro_outbound'         // BARO: 출고 보드 sanitized (D-039 창고 공유)
   | 'baro_purchase_history' // BARO: 자체 구매이력/원가 read-only
   | 'baro_cockpit'          // BARO: 거래처 360 cockpit (D-125)
   | 'baro_quote'            // BARO: 통합 견적 빌더 (D-126)
@@ -97,7 +98,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   operator: {
     menus: ['procurement','lc','inbound','inventory','orders','outbound','receipts',
             'banking','customs','purchase_history','price_forecast','import_hub','library','masters','approval','assistant','crm_inbox',
-            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_purchase_history','baro_cockpit','baro_quote','baro_home','baro_rfm','baro_sales_summary','baro_inverter','baro_shipment','baro_callback','baro_inbox',
+            'baro_group_purchase','baro_dispatch','baro_credit','baro_price_book','baro_incoming','baro_outbound','baro_purchase_history','baro_cockpit','baro_quote','baro_home','baro_rfm','baro_sales_summary','baro_inverter','baro_shipment','baro_callback','baro_inbox',
             'study_learning',
             'wms_locations','wms_picking','wms_receiving','wms_cycle_count',
             'settings'],
@@ -114,7 +115,7 @@ export const PERMISSIONS: Record<Role, RolePermission> = {
   },
   executive: {
     menus: ['inventory','orders','outbound','receipts','banking','customs','purchase_history','price_forecast','library','assistant','crm_inbox',
-            'baro_credit','baro_incoming','baro_purchase_history','baro_cockpit','baro_home','baro_rfm','baro_sales_summary','baro_inverter',
+            'baro_credit','baro_incoming','baro_outbound','baro_purchase_history','baro_cockpit','baro_home','baro_rfm','baro_sales_summary','baro_inverter',
             'study_learning',
             'wms_cycle_count',
             'settings'],

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
 	"solarflow-backend/internal/mount"
@@ -50,16 +51,16 @@ func (h *InventoryAllocationHandler) List(w http.ResponseWriter, r *http.Request
 		Select("*", "exact", false)
 
 	if cid := r.URL.Query().Get("company_id"); cid != "" && cid != "all" {
-		query = query.Eq("company_id", cid)
+		query = query.Eq(dbschema.InventoryAllocationsColCompanyId, cid)
 	}
 	if pid := r.URL.Query().Get("product_id"); pid != "" {
-		query = query.Eq("product_id", pid)
+		query = query.Eq(dbschema.InventoryAllocationsColProductId, pid)
 	}
 	if st := r.URL.Query().Get("status"); st != "" {
-		query = query.Eq("status", st)
+		query = query.Eq(dbschema.InventoryAllocationsColStatus, st)
 	}
 	if gid := r.URL.Query().Get("group_id"); gid != "" {
-		query = query.Eq("group_id", gid)
+		query = query.Eq(dbschema.InventoryAllocationsColGroupId, gid)
 	}
 
 	limit, offset := handlerutil.ParseLimitOffset(r, 100, 1000)

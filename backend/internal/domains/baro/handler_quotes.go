@@ -11,6 +11,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
@@ -66,15 +67,15 @@ type QuoteWithLines struct {
 func (h *BaroQuotesHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := h.DB.From("baro_quotes").Select("*", "exact", false)
 	if pid := r.URL.Query().Get("partner_id"); pid != "" {
-		q = q.Eq("partner_id", pid)
+		q = q.Eq(dbschema.BaroQuotesColPartnerId, pid)
 	}
 	if st := r.URL.Query().Get("status"); st != "" {
-		q = q.Eq("status", st)
+		q = q.Eq(dbschema.BaroQuotesColStatus, st)
 	}
 	if r.URL.Query().Get("mine") == "true" {
 		uid := middleware.GetUserID(r.Context())
 		if uid != "" {
-			q = q.Eq("created_by", uid)
+			q = q.Eq(dbschema.BaroQuotesColCreatedBy, uid)
 		}
 	}
 	data, _, err := q.

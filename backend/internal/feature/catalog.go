@@ -136,6 +136,7 @@ const (
 	// ---- baro.* (BARO 전용) ----
 	IDBaroCallbackRecommend FeatureID = "baro.callback_recommend"
 	IDBaroIncoming          FeatureID = "baro.incoming"
+	IDBaroOutbound          FeatureID = "baro.outbound"
 	IDBaroPurchaseHistory   FeatureID = "baro.purchase_history"
 	IDBaroCreditBoard       FeatureID = "baro.credit_board"
 	IDBaroDispatch          FeatureID = "baro.dispatch"
@@ -475,6 +476,12 @@ var Catalog = map[FeatureID]Feature{
 		ID: IDBaroIncoming, Name: "BARO 입고예정", Description: "ETA·수량 read-only sanitized (D-116)",
 		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeColumnMasked,
 		Paths: []string{"/api/v1/baro/incoming/"},
+	},
+	IDBaroOutbound: {
+		ID: IDBaroOutbound, Name: "BARO 출고 보드",
+		Description:    "module 계열이 등록한 출고를 가격·메모·source_payload 마스킹한 sanitized view (D-039 창고 공유)",
+		DefaultTenants: TenantSetBaroOnly, DefaultScope: DataScopeColumnMasked,
+		Paths:          []string{"/api/v1/baro/outbounds/"},
 	},
 	// PR-8: D-127 frontend-only 영업 일일 홈 — backend 라우트 0, sidebar 가시성만 카탈로그가 정한다.
 	IDBaroHome: {

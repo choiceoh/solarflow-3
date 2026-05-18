@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * 컬럼 고정(pinning) 상태 영속 저장. localStorage 키: `sf.colpin.{scopeId}`.
@@ -10,23 +10,36 @@ export interface ColumnPinningState {
   right: string[];
 }
 
-const COLPIN_PREFIX = 'sf.colpin.';
+export const COLPIN_PREFIX = 'sf.colpin.';
 
 const EMPTY: ColumnPinningState = { left: [], right: [] };
 
-export function loadPinning(scopeId: string): ColumnPinningState {
-  if (typeof localStorage === 'undefined') return { left: [], right: [] };
+function sanitizePinning(value: unknown): ColumnPinningState {
+  if (!value || typeof value !== 'object') return { left: [], right: [] };
+  const obj = value as { left?: unknown; right?: unknown };
+  return {
+    left: Array.isArray(obj.left) ? obj.left.filter((s) => typeof s === 'string') : [],
+    right: Array.isArray(obj.right) ? obj.right.filter((s) => typeof s === 'string') : [],
+  };
+}
+
+function isEmpty(p: ColumnPinningState): boolean {
+  return p.left.length === 0 && p.right.length === 0;
+}
+
+/**
+ * fallback 은 운영자 사이트 default — 사용자 localStorage 가 비어 있을 때만 적용.
+ */
+export function loadPinning(scopeId: string, fallback?: ColumnPinningState): ColumnPinningState {
+  const cleanFallback = sanitizePinning(fallback);
+  if (typeof localStorage === 'undefined') return cleanFallback;
   try {
     const raw = localStorage.getItem(COLPIN_PREFIX + scopeId);
-    if (!raw) return { left: [], right: [] };
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== 'object') return { left: [], right: [] };
-    return {
-      left: Array.isArray(obj.left) ? obj.left.filter((s: unknown) => typeof s === 'string') : [],
-      right: Array.isArray(obj.right) ? obj.right.filter((s: unknown) => typeof s === 'string') : [],
-    };
+    if (!raw) return cleanFallback;
+    const parsed = sanitizePinning(JSON.parse(raw));
+    return isEmpty(parsed) ? cleanFallback : parsed;
   } catch {
-    return { left: [], right: [] };
+    return cleanFallback;
   }
 }
 
@@ -39,8 +52,17 @@ export function savePinning(scopeId: string, pinning: ColumnPinningState): void 
   localStorage.setItem(COLPIN_PREFIX + scopeId, JSON.stringify(pinning));
 }
 
-export function useColumnPinning(scopeId: string) {
-  const [pinning, setPinningState] = useState<ColumnPinningState>(() => loadPinning(scopeId));
+export function useColumnPinning(scopeId: string, fallback?: ColumnPinningState) {
+  const [pinning, setPinningState] = useState<ColumnPinningState>(() => loadPinning(scopeId, fallback));
+
+  // 늦게 도착한 운영자 default — 사용자 localStorage 가 비어 있고 현 state 도 비었을
+  // 때만 1회 적용.
+  useEffect(() => {
+    if (!fallback || isEmpty(fallback)) return;
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem(COLPIN_PREFIX + scopeId)) return;
+    setPinningState((prev) => (isEmpty(prev) ? sanitizePinning(fallback) : prev));
+  }, [scopeId, fallback]);
 
   const setPinning = useCallback((updater: ColumnPinningState | ((prev: ColumnPinningState) => ColumnPinningState)) => {
     setPinningState((prev) => {
@@ -49,6 +71,11 @@ export function useColumnPinning(scopeId: string) {
       return next;
     });
   }, [scopeId]);
+
+  const resetToFallback = useCallback(() => {
+    savePinning(scopeId, { left: [], right: [] });
+    setPinningState(fallback ? sanitizePinning(fallback) : { left: [], right: [] });
+  }, [scopeId, fallback]);
 
   const pinLeft = useCallback((columnId: string) => {
     setPinning((prev) => ({
@@ -77,5 +104,5 @@ export function useColumnPinning(scopeId: string) {
     return undefined;
   }, [pinning]);
 
-  return { pinning, setPinning, pinLeft, pinRight, unpin, getPinSide, EMPTY };
+  return { pinning, setPinning, pinLeft, pinRight, unpin, getPinSide, resetToFallback, EMPTY };
 }

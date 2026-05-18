@@ -114,6 +114,7 @@
 |---|---|---|---|---|
 | `baro.callback_recommend` | BARO 자동 콜백 추천 엔진 | B | tenant_owned | D-133 |
 | `baro.incoming` | BARO 입고예정 | B | column_masked | D-116 sanitized |
+| `baro.outbound` | BARO 출고 보드 (sanitized) | B | column_masked | D-039 창고 공유 — 가격·메모·source_payload 마스킹 |
 | `baro.purchase_history` | BARO 자체 매입원가 (BR 법인) | B | tenant_company | D-117 |
 | `baro.credit_board` | BARO 미수금/한도 보드 | B | tenant_company | Phase 3 |
 | `baro.dispatch` | BARO 배차/일정 | B | tenant_owned | Phase 4 |

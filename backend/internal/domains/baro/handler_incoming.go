@@ -9,6 +9,7 @@ import (
 	"github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
+	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/domains/bl"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/mount"
@@ -86,16 +87,16 @@ func (h *BaroIncomingHandler) List(w http.ResponseWriter, r *http.Request) {
 		Select("bl_id, bl_number, company_id, manufacturer_id, inbound_type, etd, eta, actual_arrival, port, warehouse_id, status", "exact", false)
 
 	if status := r.URL.Query().Get("status"); status != "" {
-		query = query.Eq("status", status)
+		query = query.Eq(dbschema.BlShipmentsColStatus, status)
 	} else if r.URL.Query().Get("scope") != "all" {
-		query = query.In("status", []string{"scheduled", "shipping", "arrived", "customs"})
+		query = query.In(dbschema.BlShipmentsColStatus, []string{"scheduled", "shipping", "arrived", "customs"})
 	}
 	if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
-		query = query.Eq("company_id", companyID)
+		query = query.Eq(dbschema.BlShipmentsColCompanyId, companyID)
 	}
 
 	shipData, _, err := query.
-		Order("eta", &postgrest.OrderOpts{Ascending: true}).
+		Order(dbschema.BlShipmentsColEta, &postgrest.OrderOpts{Ascending: true}).
 		Execute()
 	if err != nil {
 		log.Printf("[BARO 입고예정 B/L 조회 실패] %v", err)

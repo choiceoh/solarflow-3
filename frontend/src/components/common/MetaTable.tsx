@@ -61,7 +61,7 @@ import { useColumnWidths, type ColumnSizingState } from "@/lib/columnWidths"
 import { useColumnSort, type SortingState } from "@/lib/columnSort"
 import type { ColumnPinningState as SfColumnPinningState } from "@/lib/columnPinning"
 import { useColumnOrder, resolveOrder } from "@/lib/columnOrder"
-import { getTableDefault } from "@/stores/uiDefaultsStore"
+import { useUiDefaultsStore } from "@/stores/uiDefaultsStore"
 
 const DRAG_THRESHOLD_PX = 5
 
@@ -242,12 +242,19 @@ export function MetaTable<T>({
   // 폭/정렬/순서는 MetaTable 이 보유. pinning 은 ColumnVisibilityMenu 와 공유 필요해
   // 페이지가 보유하고 prop 으로 받음.
   //
-  // 운영자 default: tableId 가 있으면 store 에서 한 번 읽어 hook fallback 으로 넘긴다.
-  // 사용자 localStorage 가 비어 있을 때만 적용된다(개인 > 운영자, hook 내부에서 강제).
-  const operatorDefault = tableId ? getTableDefault(tableId) : undefined
+  // 운영자 default: store 를 구독하므로 늦게 도착해도 re-render 되어 hook 의
+  // late-merge effect 가 적용한다. 사용자 localStorage 가 비어 있을 때만 적용된다.
+  const operatorDefault = useUiDefaultsStore((s) =>
+    tableId ? s.defaults.tables[tableId] : undefined,
+  )
   const widths = useColumnWidths(tableId ?? "", operatorDefault?.widths)
-  const sortPersist = useColumnSort(tableId ?? "")
+  const sortPersist = useColumnSort(tableId ?? "", operatorDefault?.sort)
   const orderPersist = useColumnOrder(tableId ?? "", operatorDefault?.order)
+  const hasOperatorDefault =
+    !!operatorDefault &&
+    ((operatorDefault.order?.length ?? 0) > 0 ||
+      Object.keys(operatorDefault.widths ?? {}).length > 0 ||
+      (operatorDefault.sort?.length ?? 0) > 0)
   const persistEnabled = !!tableId
   const pinningEnabled = !!pinning
 
@@ -1182,6 +1189,26 @@ export function MetaTable<T>({
                   }}
                 >
                   <EyeOff className="h-3 w-3" />열 숨기기
+                </button>,
+              )
+            }
+            if (hasOperatorDefault && persistEnabled) {
+              if (items.length > 0) items.push(<div key="sep-op" className="sf-col-ctx-sep" />)
+              items.push(
+                <button
+                  key="reset-to-operator"
+                  type="button"
+                  className="sf-col-ctx-item"
+                  title="이 테이블의 컬럼 순서·폭·정렬을 사이트 운영자가 설정한 기본값으로 되돌립니다"
+                  onClick={() => {
+                    orderPersist.resetToFallback?.()
+                    widths.resetToFallback?.()
+                    sortPersist.resetToFallback?.()
+                    setCtxMenu(null)
+                  }}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  운영자 기본값으로 되돌리기
                 </button>,
               )
             }

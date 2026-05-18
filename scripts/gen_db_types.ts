@@ -59,6 +59,7 @@ const GO_RESERVED = new Set<string>([
 
 interface ColumnRow {
   table_name: string
+  relation_kind: 'table' | 'view'
   column_name: string
   ordinal_position: number
   is_nullable: 'YES' | 'NO'
@@ -83,9 +84,59 @@ interface Column {
   comment: string | null
 }
 
-interface Table {
+interface Relation {
   name: string
+  kind: 'table' | 'view'
   columns: Column[]
+}
+
+// CHECK 제약 enum (`col IN (...)` / `col = ANY (ARRAY[...])` 패턴).
+// table_name + column_name → 허용값 리스트.
+interface CheckEnum {
+  table: string
+  column: string
+  values: string[]
+}
+
+interface RpcArg {
+  name: string
+  pgType: string  // 'uuid', 'text', 'jsonb' 등 (배열 prefix `_` 제거)
+  isArray: boolean
+  hasDefault: boolean  // DEFAULT 가 있으면 호출 시 optional
+}
+
+interface Rpc {
+  name: string
+  args: RpcArg[]
+  returnsRaw: string  // 'jsonb' / 'TABLE(...)' / 'text' 등 — Returns 는 단순 매핑
+}
+
+interface RpcRow {
+  name: string
+  args_text: string  // pg_get_function_arguments 결과
+  result_text: string  // pg_get_function_result 결과
+}
+
+// 단순화된 1:1 FK — composite FK 는 동일 constraint 가 여러 column 로 나옴.
+// Supabase CLI 호환 Relationships 형태로 emit.
+interface FkRow {
+  constraint_name: string
+  source_table: string
+  source_column: string
+  target_table: string
+  target_column: string
+}
+
+interface FkRelationship {
+  foreignKeyName: string
+  columns: string[]
+  referencedRelation: string
+  referencedColumns: string[]
+}
+
+interface CheckConstraintRow {
+  table_name: string
+  constraint_def: string  // pg_get_constraintdef() 출력 그대로
 }
 
 // ─── 식별자 변환 ─────────────────────────────────────────────────────────────
@@ -184,9 +235,19 @@ function pgToTs(col: Column): string {
 
 // ─── introspection ───────────────────────────────────────────────────────────
 
+// 테이블 + 뷰 둘 다 수집. pg_tables 와 pg_views 를 LEFT JOIN 으로 합쳐 kind 태깅.
+// view 는 information_schema.columns 에 동일 형식으로 노출돼 컬럼 정보를 그대로 재사용.
+// PK 정보는 view 에는 적용되지 않지만 information_schema.key_column_usage 가 빈 결과를
+// 돌려주므로 is_primary_key=false 로 자동 채워진다 (별도 분기 불필요).
 const INTROSPECT_SQL = `
+WITH relations AS (
+  SELECT tablename AS relname, 'table'::text AS kind FROM pg_tables WHERE schemaname = 'public'
+  UNION ALL
+  SELECT viewname AS relname,  'view'::text  AS kind FROM pg_views  WHERE schemaname = 'public'
+)
 SELECT
   c.table_name,
+  rel.kind AS relation_kind,
   c.column_name,
   c.ordinal_position,
   c.is_nullable,
@@ -211,16 +272,207 @@ SELECT
     c.ordinal_position
   ) AS column_comment
 FROM information_schema.columns c
+JOIN relations rel ON rel.relname = c.table_name
 WHERE c.table_schema = 'public'
-  AND c.table_name IN (
-    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-  )
-ORDER BY c.table_name, c.ordinal_position
+ORDER BY rel.kind, c.table_name, c.ordinal_position
 `
 
-async function introspect(sql: SQL): Promise<Table[]> {
+// pg_constraint 에서 CHECK 제약(`contype = 'c'`) 만 가져와 텍스트 정의를 정규식으로 파싱.
+// 본 시스템은 단순 enum 패턴 (`col IN (...)` / `col = ANY (ARRAY[...])`) 만 지원 — 복잡한
+// 표현식 (멀티컬럼, OR, 비교 연산자 등) 은 무시한다 (parseCheckEnum 가 null 반환).
+const CHECK_CONSTRAINTS_SQL = `
+SELECT
+  cls.relname AS table_name,
+  pg_get_constraintdef(con.oid) AS constraint_def
+FROM pg_constraint con
+JOIN pg_class cls ON cls.oid = con.conrelid
+JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+WHERE nsp.nspname = 'public'
+  AND con.contype = 'c'
+ORDER BY cls.relname, con.conname
+`
+
+// CHECK 제약 텍스트를 파싱해 enum 형태인 경우만 추출.
+//
+// 지원하는 형식 (실제 운영 DB 에서 관찰된 패턴):
+//   1) `CHECK (((col)::text = ANY ((ARRAY['v1'::character varying, 'v2'::...])::text[])))`
+//   2) `CHECK (col = ANY (ARRAY['v1'::text, 'v2'::text]))`
+//   3) `CHECK ((col IN ('v1', 'v2', 'v3')))`
+//
+// 미지원 (null 반환):
+//   - 비교 연산자, 함수 호출, OR/AND 결합, 멀티컬럼 등
+function parseCheckEnum(constraintDef: string): { column: string; values: string[] } | null {
+  // 컬럼명 후보 + 값 리스트를 찾는다. col 부분의 ::text 캐스트는 옵션.
+  // 두 가지 패턴 모두 한 정규식으로:
+  //   1) (col)::text = ANY (ARRAY[...])
+  //   2) col = ANY (ARRAY[...])
+  //   3) col IN (...)
+  const reAny = /\(?\(?(\w+)\)?(?:::[a-z ]+)?\s*=\s*ANY\s*\(\(?ARRAY\[([^\]]+)\]/i
+  const reIn = /\(?(\w+)\)?\s+IN\s*\(([^)]+)\)/i
+
+  let col: string | null = null
+  let valuesRaw: string | null = null
+
+  const mAny = reAny.exec(constraintDef)
+  if (mAny) {
+    col = mAny[1]
+    valuesRaw = mAny[2]
+  } else {
+    const mIn = reIn.exec(constraintDef)
+    if (mIn) {
+      col = mIn[1]
+      valuesRaw = mIn[2]
+    }
+  }
+
+  if (!col || !valuesRaw) return null
+
+  // values 추출 — `'foo'::character varying` 또는 `'foo'::text` 또는 `'foo'` 모두 매칭.
+  const values: string[] = []
+  const reValue = /'([^']+)'/g
+  let m: RegExpExecArray | null
+  while ((m = reValue.exec(valuesRaw)) !== null) {
+    values.push(m[1])
+  }
+
+  if (values.length === 0) return null
+  return { column: col, values }
+}
+
+// RPC 함수 인트로스펙션 — public 스키마의 일반 함수 (trigger / event_trigger 제외).
+// `prokind = 'f'` 만, return type 이 trigger/event_trigger 인 행은 SQL 단에서 제외.
+const RPC_INTROSPECT_SQL = `
+SELECT
+  p.proname AS name,
+  pg_catalog.pg_get_function_arguments(p.oid) AS args_text,
+  pg_catalog.pg_get_function_result(p.oid) AS result_text
+FROM pg_catalog.pg_proc p
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.prokind = 'f'
+  AND pg_catalog.pg_get_function_result(p.oid) NOT IN ('trigger', 'event_trigger')
+ORDER BY p.proname
+`
+
+// 함수 인자 텍스트 (`p_company_id uuid DEFAULT NULL::uuid, p_status text`) 파싱.
+// 단순 top-level split — 함수 안 함수 호출은 없다고 가정 (운영 RPC 가 그렇지 않은 게 검증됨).
+function parseRpcArgs(argsText: string): RpcArg[] {
+  const text = argsText.trim()
+  if (text === '') return []
+  // 최상위 콤마 split — 괄호 깊이 추적.
+  const parts: string[] = []
+  let depth = 0
+  let buf = ''
+  for (const ch of text) {
+    if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth--
+    if (ch === ',' && depth === 0) {
+      parts.push(buf.trim())
+      buf = ''
+    } else {
+      buf += ch
+    }
+  }
+  if (buf.trim()) parts.push(buf.trim())
+
+  const args: RpcArg[] = []
+  for (const part of parts) {
+    // `<name> <type> [DEFAULT <expr>]` 또는 `<name> <type>`
+    const m = /^(\w+)\s+(.+?)(?:\s+DEFAULT\s+.+)?$/i.exec(part)
+    if (!m) continue
+    const name = m[1]
+    let type = m[2].trim()
+    const isArray = /\[\]$/.test(type)
+    if (isArray) type = type.slice(0, -2).trim()
+    args.push({
+      name,
+      pgType: type,
+      isArray,
+      hasDefault: /\sDEFAULT\s/i.test(part),
+    })
+  }
+  return args
+}
+
+// FK 인트로스펙션 — 단일/복합 모두 동일 constraint_name 으로 그룹.
+// kcu.position_in_unique_constraint 가 양쪽 컬럼 페어링 유지.
+const FK_INTROSPECT_SQL = `
+SELECT
+  tc.constraint_name,
+  tc.table_name   AS source_table,
+  kcu.column_name AS source_column,
+  ccu.table_name  AS target_table,
+  ccu.column_name AS target_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_name = tc.constraint_name
+ AND kcu.constraint_schema = tc.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name
+ AND ccu.constraint_schema = tc.constraint_schema
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_schema = 'public'
+ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position
+`
+
+async function introspectFks(sql: SQL): Promise<Map<string, FkRelationship[]>> {
+  const rows = (await sql.unsafe(FK_INTROSPECT_SQL)) as FkRow[]
+  // (source_table, constraint_name) 으로 그룹핑 (composite FK 처리).
+  const byTableAndConstraint = new Map<string, FkRelationship>()
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.source_table)) continue
+    const key = `${r.source_table}::${r.constraint_name}`
+    const existing = byTableAndConstraint.get(key)
+    if (existing) {
+      existing.columns.push(r.source_column)
+      existing.referencedColumns.push(r.target_column)
+    } else {
+      byTableAndConstraint.set(key, {
+        foreignKeyName: r.constraint_name,
+        columns: [r.source_column],
+        referencedRelation: r.target_table,
+        referencedColumns: [r.target_column],
+      })
+    }
+  }
+
+  // 테이블별로 모으기
+  const byTable = new Map<string, FkRelationship[]>()
+  for (const [key, rel] of byTableAndConstraint) {
+    const sourceTable = key.split('::')[0]
+    const list = byTable.get(sourceTable) ?? []
+    list.push(rel)
+    byTable.set(sourceTable, list)
+  }
+  return byTable
+}
+
+async function introspectRpcs(sql: SQL): Promise<Rpc[]> {
+  const rows = (await sql.unsafe(RPC_INTROSPECT_SQL)) as RpcRow[]
+  return rows.map((r) => ({
+    name: r.name,
+    args: parseRpcArgs(r.args_text),
+    returnsRaw: r.result_text,
+  }))
+}
+
+async function introspectCheckEnums(sql: SQL): Promise<CheckEnum[]> {
+  const rows = (await sql.unsafe(CHECK_CONSTRAINTS_SQL)) as CheckConstraintRow[]
+  const enums: CheckEnum[] = []
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.table_name)) continue
+    const parsed = parseCheckEnum(r.constraint_def)
+    if (!parsed) continue
+    enums.push({ table: r.table_name, column: parsed.column, values: parsed.values })
+  }
+  // table + column 정렬 (안정적 출력)
+  enums.sort((a, b) => a.table.localeCompare(b.table) || a.column.localeCompare(b.column))
+  return enums
+}
+
+async function introspect(sql: SQL): Promise<Relation[]> {
   const rows = (await sql.unsafe(INTROSPECT_SQL)) as ColumnRow[]
-  const byTable = new Map<string, Column[]>()
+  const byRelation = new Map<string, { kind: 'table' | 'view'; columns: Column[] }>()
 
   for (const r of rows) {
     if (EXCLUDE_TABLES.has(r.table_name)) continue
@@ -238,22 +490,119 @@ async function introspect(sql: SQL): Promise<Table[]> {
       isPrimaryKey: r.is_primary_key,
       comment: r.column_comment,
     }
-    const list = byTable.get(r.table_name)
-    if (list) list.push(col)
-    else byTable.set(r.table_name, [col])
+    const entry = byRelation.get(r.table_name)
+    if (entry) entry.columns.push(col)
+    else byRelation.set(r.table_name, { kind: r.relation_kind, columns: [col] })
   }
 
-  return Array.from(byTable.entries())
-    .map(([name, columns]) => ({ name, columns }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  return Array.from(byRelation.entries())
+    .map(([name, { kind, columns }]) => ({ name, kind, columns }))
+    .sort((a, b) => {
+      // table 먼저, 그 안에서 이름순. view 는 뒤로 묶어 가독성 확보.
+      if (a.kind !== b.kind) return a.kind === 'table' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
 }
 
 // ─── Go 렌더링 ───────────────────────────────────────────────────────────────
 
-function renderGo(tables: Table[]): string {
+// CHECK enum 의 컬럼값을 PascalCase 식별자로 변환 — Go const 이름 용.
+// 'erp_done' → 'ErpDone', 'domestic_foreign' → 'DomesticForeign' 등.
+function enumValueToIdent(v: string): string {
+  // 영숫자만 keep, 나눠서 PascalCase
+  const parts = v.replace(/[^A-Za-z0-9]+/g, '_').split('_').filter(Boolean)
+  if (parts.length === 0) return 'Empty'
+  let id = parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('')
+  if (/^[0-9]/.test(id)) id = 'V' + id
+  return id
+}
+
+function renderGoEnums(enums: CheckEnum[]): string {
+  if (enums.length === 0) return ''
+  const blocks = enums.map((e) => {
+    const tablePascal = snakeToPascal(e.table)
+    const colPascal = snakeToPascal(e.column)
+
+    // ASCII-only fallback: 한글/유니코드 등은 PascalCase 매핑이 의미 없거나 충돌하므로
+    // const 자체를 emit 하지 않고 슬라이스만 emit. 사용자는 Values 슬라이스로 검증.
+    const asciiOnly = e.values.filter((v) => /^[A-Za-z0-9_\- ]+$/.test(v))
+    const skippedNonAscii = e.values.length - asciiOnly.length
+
+    // 충돌 방지 — 동일 식별자가 두 번 나오면 인덱스 suffix.
+    const seenIdents = new Set<string>()
+    const constLines = asciiOnly.map((v) => {
+      let ident = enumValueToIdent(v)
+      let i = 2
+      while (seenIdents.has(ident)) {
+        ident = `${enumValueToIdent(v)}${i}`
+        i++
+      }
+      seenIdents.add(ident)
+      return `\t${tablePascal}${colPascal}${ident} = "${v}"`
+    })
+
+    const sliceItems = e.values.map((v) => `"${v.replace(/"/g, '\\"')}"`).join(', ')
+    const constsBlock = constLines.length > 0
+      ? [`const (`, constLines.join('\n'), `)`, ``].join('\n')
+      : ''
+    const skipNote = skippedNonAscii > 0
+      ? `// ${skippedNonAscii} 개 값은 비-ASCII (예: 한글) 이라 const 식별자 생성 생략. Values 슬라이스로만 접근.\n`
+      : ''
+
+    return [
+      `// ${tablePascal}${colPascal}* — public.${e.table}.${e.column} CHECK 허용값.`,
+      `// 손코딩 validXxx maps 대신 본 상수/슬라이스를 사용해 컴파일타임 검증.`,
+      `${skipNote}${constsBlock}`,
+      `// ${tablePascal}${colPascal}Values — DB CHECK 제약과 1:1 동기. validation 헬퍼에 쓰기 좋음.`,
+      `var ${tablePascal}${colPascal}Values = []string{${sliceItems}}`,
+      ``,
+    ].join('\n')
+  })
+  return [
+    `// ─── CHECK 제약 enum (introspection 자동 추출) ────────────────────────────────`,
+    ``,
+    blocks.join('\n'),
+  ].join('\n')
+}
+
+function renderGoRpcs(rpcs: Rpc[]): string {
+  if (rpcs.length === 0) return ''
+  const constLines = rpcs.map((r) => `\tRpc${snakeToPascal(r.name)} = "${r.name}"`)
+  const argBlocks = rpcs.map((r) => {
+    if (r.args.length === 0) return ''
+    const pascal = snakeToPascal(r.name)
+    const fields = r.args.map((a) => {
+      const goFieldName = goFieldIdent(a.name)
+      return `\t${goFieldName} = "${a.name}"`
+    })
+    return [
+      ``,
+      `// Rpc${pascal}Args — public.${r.name} 함수 인자명.`,
+      `// 사용: client.Rpc(dbschema.Rpc${pascal}, "", map[string]any{dbschema.Rpc${pascal}Args.${goFieldIdent(r.args[0].name)}: ...})`,
+      `var Rpc${pascal}Args = struct {`,
+      r.args.map((a) => `\t${goFieldIdent(a.name)} string`).join('\n'),
+      `}{`,
+      r.args.map((a) => `\t${goFieldIdent(a.name)}: "${a.name}",`).join('\n'),
+      `}`,
+    ].join('\n')
+  }).filter(Boolean).join('\n')
+
+  return [
+    ``,
+    `// ─── RPC 함수 (introspection 자동 추출) ───────────────────────────────────────`,
+    ``,
+    `// RPC 함수명 상수 — client.Rpc(dbschema.Rpc<Name>, ...) 형식으로 typo 차단.`,
+    `const (`,
+    constLines.join('\n'),
+    `)`,
+    argBlocks,
+  ].join('\n')
+}
+
+function renderGo(relations: Relation[], enums: CheckEnum[], rpcs: Rpc[]): string {
   let needsJson = false
 
-  const tableBlocks = tables.map((t) => {
+  const blocks = relations.map((t) => {
     const goName = snakeToPascal(t.name)
     const fieldLines: string[] = []
     const colConstLines: string[] = []
@@ -269,21 +618,27 @@ function renderGo(tables: Table[]): string {
       fieldLines.push(`${docLine}\t${fieldName} ${goType} \`json:"${jsonTag}"\``)
 
       const constName = `${goName}Col${fieldName}`
-      colConstLines.push(`\t${constName} ${goName}Column = "${c.name}"`)
+      // 명시적 untyped string — postgrest-go API 가 plain string 을 받으므로 그대로 통과,
+      // 타입 캐스팅 없이 query.Eq(dbschema.BlShipmentsColPoId, ...) 형식으로 호출 가능.
+      // 존재하지 않는 컬럼명 참조는 컴파일타임에 잡힘 (typo 방지).
+      colConstLines.push(`\t${constName} = "${c.name}"`)
       colNames.push(c.name)
     }
 
+    const kindLabel = t.kind === 'view' ? '뷰' : '테이블'
+    const writeNote = t.kind === 'view'
+      ? '// view 는 PostgREST 에서 read-only — Insert/Update 의 컬럼 검증엔 베이스 테이블 상수를 사용한다.'
+      : '// 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,\n// Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.'
+
     return [
-      `// ${goName} — public.${t.name} 의 row 표현 (introspection 정본).`,
-      `// 도메인별 손코딩 Create/Update Request 와 별개로 유지 — Row 는 *DB 정본*,`,
-      `// Request 는 *클라이언트 입력 + validation* 책임이라 양쪽을 분리한다.`,
+      `// ${goName} — public.${t.name} 의 ${kindLabel} row 표현 (introspection 정본).`,
+      writeNote,
       `type ${goName} struct {`,
       fieldLines.join('\n'),
       `}`,
       '',
-      `// ${goName}Column — public.${t.name} 의 컬럼명 (PostgREST select 시 타입 안전성).`,
-      `type ${goName}Column string`,
-      '',
+      `// ${goName}Col* — public.${t.name} 의 컬럼명 상수.`,
+      `// 사용: query.Eq(dbschema.${goName}Col${snakeToPascal(t.columns[0]?.name ?? 'X')}, value)`,
       `const (`,
       colConstLines.join('\n'),
       `)`,
@@ -295,28 +650,91 @@ function renderGo(tables: Table[]): string {
   }).join('\n')
 
   const imports = needsJson ? `import "encoding/json"\n\n` : ''
+  const enumsSection = renderGoEnums(enums)
+  const rpcsSection = renderGoRpcs(rpcs)
 
   return `// Code generated by scripts/gen_db_types.ts. DO NOT EDIT.
 //
-// Source: information_schema introspection against SUPABASE_DB_URL.
+// Source: information_schema + pg_constraint introspection against SUPABASE_DB_URL.
 // Run \`bun scripts/gen_db_types.ts\` to regenerate.
 //
-// 이 패키지는 DB 스키마의 컴파일타임 정본이다.
+// 이 패키지는 DB 스키마(테이블 + 뷰 + CHECK enum)의 컴파일타임 정본이다.
 //   - PostgREST select 시 컬럼명 typo 를 컴파일타임에 잡으려면
-//     dbschema.<Table>AllColumns 또는 dbschema.<Table>Col<Field> 상수를 사용한다.
+//     dbschema.<Relation>AllColumns 또는 dbschema.<Relation>Col<Field> 상수를 사용한다.
+//   - CHECK 제약의 허용값은 dbschema.<Table><Col><Value> 상수 + <Table><Col>Values 슬라이스로
+//     접근. 도메인의 손코딩 validXxxStatuses map 을 점진적으로 대체 가능.
 //   - 도메인의 Create*Request / Update*Request 는 손코딩으로 둔다 — validation
-//     로직(필수값, 허용 enum, 길이 제한)이 그쪽에 속한다.
+//     로직(필수값, 길이 제한 등)이 그쪽에 속한다.
+//   - View 는 read-only — Insert/Update 시 베이스 테이블 상수를 쓴다.
 //   - 본 파일이 1줄이라도 변경되면 그건 *DB 스키마가 바뀐 것* — 커밋에 같이 포함한다.
 
 package dbschema
 
-${imports}${tableBlocks}`
+${imports}${blocks}
+${enumsSection}
+${rpcsSection}`
 }
 
 // ─── TS 렌더링 ───────────────────────────────────────────────────────────────
 
-function renderTs(tables: Table[]): string {
-  const tableBlocks = tables.map((t) => {
+function renderTsEnums(enums: CheckEnum[]): string {
+  if (enums.length === 0) return ''
+  return enums.map((e) => {
+    const key = `${e.table}_${e.column}`
+    const union = e.values.map((v) => `'${v.replace(/'/g, "\\'")}'`).join(' | ')
+    return `      /** public.${e.table}.${e.column} CHECK 허용값 */\n      ${key}: ${union}`
+  }).join('\n')
+}
+
+function renderTsRpcs(rpcs: Rpc[]): string {
+  if (rpcs.length === 0) return ''
+  return rpcs.map((r) => {
+    const argFields = r.args.length === 0
+      ? `        Record<string, never>`
+      : r.args.map((a) => {
+          let tsType = pgToTsBase(a.pgType)
+          if (a.isArray) tsType = `${tsType}[]`
+          // DEFAULT 있으면 호출 시 optional, 그리고 NULL 가능
+          const sep = a.hasDefault ? '?' : ''
+          const nullable = a.hasDefault ? ' | null' : ''
+          return `          ${a.name}${sep}: ${tsType}${nullable}`
+        }).join('\n')
+    const argsBlock = r.args.length === 0
+      ? argFields
+      : [`        {`, argFields, `        }`].join('\n')
+    // Returns 매핑: TABLE(...) 는 unknown[], jsonb 는 Json, primitive 는 매핑.
+    const ret = r.returnsRaw.trim()
+    let returnsTs: string
+    if (ret.startsWith('TABLE(') || ret.startsWith('SETOF ')) returnsTs = 'unknown[]'
+    else if (ret === 'jsonb' || ret === 'json') returnsTs = 'Json'
+    else if (ret === 'void') returnsTs = 'undefined'
+    else returnsTs = pgToTsBase(ret)
+    return `      ${r.name}: {\n        Args: ${argsBlock}\n        Returns: ${returnsTs}\n      }`
+  }).join('\n')
+}
+
+// FK relationship 의 TS 리터럴 직렬화 — Supabase CLI 형식 유지.
+function renderRelationshipsTs(rels: FkRelationship[]): string {
+  if (rels.length === 0) return '[]'
+  const lines = rels.map((r) => {
+    const cols = r.columns.map((c) => `'${c}'`).join(', ')
+    const refCols = r.referencedColumns.map((c) => `'${c}'`).join(', ')
+    return `        {
+          foreignKeyName: '${r.foreignKeyName}'
+          columns: [${cols}]
+          isOneToOne: false
+          referencedRelation: '${r.referencedRelation}'
+          referencedColumns: [${refCols}]
+        }`
+  })
+  return `[\n${lines.join(',\n')},\n      ]`
+}
+
+function renderTs(relations: Relation[], enums: CheckEnum[], rpcs: Rpc[], fks: Map<string, FkRelationship[]>): string {
+  const tables = relations.filter((r) => r.kind === 'table')
+  const views = relations.filter((r) => r.kind === 'view')
+
+  const renderTableBlock = (t: Relation): string => {
     const rowFields: string[] = []
     const insertFields: string[] = []
     const updateFields: string[] = []
@@ -336,6 +754,7 @@ function renderTs(tables: Table[]): string {
       updateFields.push(`        ${c.name}?: ${tsType}`)
     }
 
+    const tableRels = fks.get(t.name) ?? []
     return [
       `    ${t.name}: {`,
       `      Row: {`,
@@ -347,10 +766,35 @@ function renderTs(tables: Table[]): string {
       `      Update: {`,
       updateFields.join('\n'),
       `      }`,
+      `      Relationships: ${renderRelationshipsTs(tableRels)}`,
+      `    }`,
+    ].join('\n')
+  }
+
+  // View 는 read-only — Supabase CLI 와 동일하게 Row + Relationships 만 노출 (Insert/Update 생략).
+  const renderViewBlock = (v: Relation): string => {
+    const rowFields: string[] = []
+    for (const c of v.columns) {
+      const tsType = pgToTs(c)
+      const docLine = c.comment ? `        /** ${c.comment.replace(/\n/g, ' ').trim()} */\n` : ''
+      rowFields.push(`${docLine}        ${c.name}: ${tsType}`)
+    }
+    return [
+      `    ${v.name}: {`,
+      `      Row: {`,
+      rowFields.join('\n'),
+      `      }`,
       `      Relationships: []`,
       `    }`,
     ].join('\n')
-  }).join('\n')
+  }
+
+  const tablesSection = tables.length > 0
+    ? tables.map(renderTableBlock).join('\n')
+    : ''
+  const viewsSection = views.length > 0
+    ? views.map(renderViewBlock).join('\n')
+    : ''
 
   return `// Code generated by scripts/gen_db_types.ts. DO NOT EDIT.
 //
@@ -364,6 +808,7 @@ function renderTs(tables: Table[]): string {
 // 사용 예:
 //   import type { Database } from '@/types/db.gen'
 //   type BLShipment = Database['public']['Tables']['bl_shipments']['Row']
+//   type SalesMeta  = Database['public']['Views']['sales_with_meta_view']['Row']
 
 export type Json =
   | string
@@ -376,11 +821,17 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-${tableBlocks}
+${tablesSection}
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
+    Views: {
+${viewsSection}
+    }
+    Functions: ${rpcs.length === 0 ? 'Record<string, never>' : `{
+${renderTsRpcs(rpcs)}
+    }`}
+    Enums: ${enums.length === 0 ? 'Record<string, never>' : `{
+${renderTsEnums(enums)}
+    }`}
     CompositeTypes: Record<string, never>
   }
 }
@@ -430,11 +881,17 @@ async function main(): Promise<number> {
 
   try {
     log('introspection 시작')
-    const tables = await introspect(sql)
-    log(`${tables.length} 개 테이블 검출`)
+    const relations = await introspect(sql)
+    const enums = await introspectCheckEnums(sql)
+    const rpcs = await introspectRpcs(sql)
+    const fks = await introspectFks(sql)
+    const tableCount = relations.filter((r) => r.kind === 'table').length
+    const viewCount = relations.filter((r) => r.kind === 'view').length
+    const fkCount = Array.from(fks.values()).reduce((s, list) => s + list.length, 0)
+    log(`${tableCount} 개 테이블 + ${viewCount} 개 뷰 + ${enums.length} 개 CHECK enum + ${rpcs.length} 개 RPC + ${fkCount} 개 FK 검출`)
 
-    const goContent = renderGo(tables)
-    const tsContent = renderTs(tables)
+    const goContent = renderGo(relations, enums, rpcs)
+    const tsContent = renderTs(relations, enums, rpcs, fks)
 
     if (checkMode) {
       const goOk = await fileEquals(GO_OUT, goContent)

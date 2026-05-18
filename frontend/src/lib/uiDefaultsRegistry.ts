@@ -7,10 +7,13 @@
 // 사용자가 직접 조정한 컬럼은 그 컬럼만 사용자 설정을 우선한다(폭은 키 단위 머지).
 
 import { ORDER_TABLE_ID } from '@/components/orders/OrderListTable';
+import { RECEIPT_TABLE_ID } from '@/components/orders/ReceiptListTable';
 import { OUTBOUND_TABLE_ID } from '@/components/outbound/OutboundListTable';
 import { SALE_TABLE_ID } from '@/components/outbound/SaleListTable';
 import { BL_LINE_TABLE_ID } from '@/domains/bl/line-table';
+import { PO_LINE_TABLE_ID } from '@/domains/po/line-table';
 import { DECLARATION_TABLE_ID } from '@/components/customs/DeclarationListTable';
+import { EXPENSE_TABLE_ID } from '@/components/customs/ExpenseListTable';
 
 export interface ManagedTable {
   /** MetaTable 의 tableId 값. localStorage 키 prefix 와도 동일. */
@@ -28,14 +31,16 @@ export interface ManagedKpiScope {
   pagePath: string;
 }
 
-// 1차 적용 대상 — 운영자 피드백을 자주 받는 핵심 5개 테이블.
-// 추후 확장은 이 배열에 한 줄씩 추가.
+// 운영자 피드백을 자주 받는 8개 테이블. 추후 확장은 이 배열에 한 줄씩 추가.
 export const MANAGED_TABLES: ManagedTable[] = [
   { id: ORDER_TABLE_ID, label: '수주 리스트', pagePath: '/orders' },
   { id: OUTBOUND_TABLE_ID, label: '출고 리스트', pagePath: '/orders?tab=outbound' },
   { id: SALE_TABLE_ID, label: '매출 리스트', pagePath: '/orders?tab=sale' },
+  { id: RECEIPT_TABLE_ID, label: '수금 리스트', pagePath: '/orders?tab=receipt' },
   { id: BL_LINE_TABLE_ID, label: 'B/L 라인 상세', pagePath: '/procurement?tab=bl' },
+  { id: PO_LINE_TABLE_ID, label: 'P/O 라인 상세', pagePath: '/procurement?tab=po' },
   { id: DECLARATION_TABLE_ID, label: '면장 리스트', pagePath: '/customs' },
+  { id: EXPENSE_TABLE_ID, label: '부대비용 리스트', pagePath: '/customs?tab=expense' },
 ];
 
 // 1차 적용 대상 KPI 섹션. kpiScope 가 이미 코드에 박혀있는 것들 + 매출 요약.

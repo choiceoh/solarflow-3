@@ -22,6 +22,7 @@ import BLLineTable, { BL_LINE_TABLE_ID, BL_LINE_COLUMN_META } from "./line-table
 import { ColumnVisibilityMenu } from "@/components/common/ColumnVisibilityMenu"
 import { useColumnVisibility } from "@/lib/columnVisibility"
 import { useColumnPinning } from "@/lib/columnPinning"
+import { useTableDefault } from "@/stores/uiDefaultsStore"
 import LinkedMemoWidget from "@/components/memo/LinkedMemoWidget"
 import AttachmentWidget from "@/components/common/AttachmentWidget"
 import { useBLDetail, useBLLines } from "@/hooks/useInbound"
@@ -293,7 +294,7 @@ export default function BLDetailView({ blId, onBack }: Props) {
   const { data: bl, loading: blLoading, reload: reloadBL } = useBLDetail(blId)
   const { data: lines, loading: linesLoading } = useBLLines(blId)
   const blLineColVis = useColumnVisibility(BL_LINE_TABLE_ID, BL_LINE_COLUMN_META)
-  const blLineColPin = useColumnPinning(BL_LINE_TABLE_ID)
+  const blLineColPin = useColumnPinning(BL_LINE_TABLE_ID, useTableDefault(BL_LINE_TABLE_ID)?.pinning)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [manufacturerName, setManufacturerName] = useState<string>("")

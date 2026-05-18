@@ -55,6 +55,7 @@ jobs:
             schema:
               - 'backend/migrations/**'
               - 'backend/internal/dbschema/**'
+              - 'backend/scripts/check_schema.sh'
               - 'frontend/src/types/db.gen.ts'
               - 'scripts/gen_db_types.ts'
               - 'scripts/apply_migrations.ts'
@@ -119,16 +120,13 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache: false
-      - name: Cache Go modules and build
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ hashFiles('backend/go.sum') }}-${{ hashFiles('backend/**/*.go') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-go-${{ hashFiles('backend/go.sum') }}-
-            ${{ runner.os }}-${{ runner.arch }}-go-
+      # actions/cache 를 사용하지 않는다. gx10 은 self-hosted + 영구 디스크라
+      # ~/go/pkg/mod 와 ~/.cache/go-build 가 run 간 자연 보존되고, 모듈 캐시 자체가
+      # 1.13GB 까지 누적돼 GitHub Actions cache → gx10 (한국 자가호스팅) 다운로드가
+      # 10분 timeout 의 주범이었다 (#874·#876 backend fail). 로컬 디스크 hit 이
+      # 압도적으로 빠르다.
+      # 새 go.sum 으로 신규 모듈이 필요해도 `go mod download` 가 알아서 가져온다
+      # (보통 수십 초). gx10 디스크가 wipe 되면 첫 run 만 cold — 드물어 trade-off.
       # go test -vet=all ./... 이 vet 과 비-test 패키지 컴파일을 모두 커버. go build 는 main 의 link 검증.
       # 둘은 독립이라 병렬 실행. frontend job 의 tsc/vite 병렬 패턴과 동일.
       - name: Test + build (parallel)
