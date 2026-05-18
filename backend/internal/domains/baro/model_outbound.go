@@ -7,7 +7,9 @@ package baro
 //
 // 노출 정책:
 //   - 가격(unit_price_wp, supply/vat/total) · memo · source_payload 컬럼 모두 응답에 미포함
-//   - 거래처(customer_name), 현장명/주소, 워크플로우 4 체크박스는 그대로 노출
+//   - customer_id 는 outbounds 직접 컬럼이 아님 (sale/order 거쳐 도달) — BARO 보드는 site_name
+//     /site_address 만으로 충분. 거래처 join 이 필요하면 별도 후속 PR
+//   - 현장명/주소, 워크플로우 4 체크박스는 그대로 노출
 //   - status='cancelled' 는 기본 제외 (scope=all 쿼리 시에만 포함)
 type BaroOutboundItem struct {
 	OutboundID        string  `json:"outbound_id"`
@@ -23,8 +25,6 @@ type BaroOutboundItem struct {
 	WarehouseID       *string `json:"warehouse_id,omitempty"`
 	WarehouseName     *string `json:"warehouse_name,omitempty"`
 	UsageCategory     string  `json:"usage_category"`
-	CustomerID        *string `json:"customer_id,omitempty"`
-	CustomerName      *string `json:"customer_name,omitempty"`
 	SiteName          *string `json:"site_name,omitempty"`
 	SiteAddress       *string `json:"site_address,omitempty"`
 	SpareQty          *int    `json:"spare_qty,omitempty"`
