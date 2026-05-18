@@ -5,7 +5,6 @@ import type { UIMessage } from 'ai';
 import { ChatBox } from '@/packs/erp-core/pages/AssistantPage';
 import { fetchWithAuth } from '@/lib/api';
 import { isDevMockApiActive } from '@/lib/devMockApi';
-import { detectPageLabel } from '@/lib/pageContext';
 import { getPageChips } from '@/lib/assistantChips';
 
 interface AssistantDrawerProps {
@@ -42,7 +41,7 @@ const POPUP_HEIGHT = 640;
 export const AssistantDrawer = ({ open, onClose }: AssistantDrawerProps) => {
   const sessionsEnabled = !isDevMockApiActive();
   const location = useLocation();
-  const pageLabel = detectPageLabel(location.pathname) ?? getPageChips(location.pathname).label;
+  const pageLabel = getPageChips(location.pathname).label;
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [chatKey, setChatKey] = useState(0);
