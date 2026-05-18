@@ -16,6 +16,7 @@ import (
 	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -40,7 +41,8 @@ var orderSortable = map[string]struct{}{
 // OrderHandler — 수주(orders) 관련 API를 처리하는 핸들러
 // 비유: "수주 관리실" — 고객별 판매 주문서를 관리
 type OrderHandler struct {
-	DB *supa.Client
+	DB          *supa.Client
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 // NewOrderHandler — OrderHandler 생성자
@@ -57,6 +59,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewOrderHandler(d.DB)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/orders", func(r chi.Router) {
 				r.Get("/", h.List)
@@ -75,6 +78,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewOrderHandler(d.DB)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/baro/orders", func(r chi.Router) {
 				r.Use(g.Feature(feature.IDBaroOrders))
@@ -95,8 +99,22 @@ func sanitizeOrderSearchTerm(q string) string {
 }
 
 // applyOrderFilters — List/Summary 가 공유하는 필터 로직.
+//
+// BARO 격리 (D-108): BARO 토큰일 때 클라이언트 company_id 무시하고 BR 강제. 룩업 실패는
+// 빈 결과로 fail-closed (module 수주가 한 행도 새지 않도록).
 func (h *OrderHandler) applyOrderFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
-	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			log.Printf("[BARO 수주 격리] BaroCompany resolver 미주입")
+			return query, false, nil
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			log.Printf("[BARO 수주 격리] BR 법인 룩업 실패: %v", err)
+			return query, false, nil
+		}
+		query = query.Eq(dbschema.OrdersColCompanyId, baroID)
+	} else if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq(dbschema.OrdersColCompanyId, compID)
 	}
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
@@ -319,10 +337,70 @@ func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	response.RespondJSON(w, http.StatusOK, summary)
 }
 
+// baroOwnsOrderOr404 — BARO 토큰일 때 order 가 BR 소유인지 확인 (D-108).
+// orders.company_id 직접 컬럼 사용. 미일치/룩업 실패는 404 (존재 자체 숨김).
+func (h *OrderHandler) baroOwnsOrderOr404(w http.ResponseWriter, r *http.Request, orderID string) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		log.Printf("[BARO 수주 소유권 검증] BaroCompany resolver 미주입")
+		response.RespondError(w, http.StatusNotFound, "수주를 찾을 수 없습니다")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		log.Printf("[BARO 수주 소유권 검증] BR 법인 룩업 실패: %v", err)
+		response.RespondError(w, http.StatusNotFound, "수주를 찾을 수 없습니다")
+		return false
+	}
+	data, _, err := h.DB.From("orders").
+		Select(dbschema.OrdersColCompanyId, "exact", false).
+		Eq(dbschema.OrdersColOrderId, orderID).
+		Limit(1, "").
+		Execute()
+	if err != nil {
+		response.RespondError(w, http.StatusInternalServerError, "소유권 검증 실패")
+		return false
+	}
+	var rows []struct {
+		CompanyID string `json:"company_id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 || rows[0].CompanyID != baroID {
+		response.RespondError(w, http.StatusNotFound, "수주를 찾을 수 없습니다")
+		return false
+	}
+	return true
+}
+
+// baroEnforceCompanyOnOrderCreate — BARO 토큰이 수주를 등록할 때 company_id 강제 교체.
+func (h *OrderHandler) baroEnforceCompanyOnOrderCreate(w http.ResponseWriter, r *http.Request, req *CreateOrderRequest) bool {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return true
+	}
+	if h.BaroCompany == nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "BR 법인 마스터 확인 불가")
+		return false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		response.RespondError(w, http.StatusServiceUnavailable, "BR 법인 마스터 확인 불가")
+		return false
+	}
+	if req.CompanyID != baroID {
+		log.Printf("[BARO 수주 생성] company_id 강제 교체 %s -> %s", req.CompanyID, baroID)
+		req.CompanyID = baroID
+	}
+	return true
+}
+
 // GetByID — GET /api/v1/orders/{id} — 수주 상세 조회
 // 비유: 특정 주문서를 꺼내 자세히 보는 것
 func (h *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOrderOr404(w, r, id) {
+		return
+	}
 
 	data, _, err := h.DB.From("orders").
 		Select("*", "exact", false).
@@ -507,6 +585,9 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.RespondError(w, http.StatusBadRequest, "잘못된 요청 형식입니다")
 		return
 	}
+	if !h.baroEnforceCompanyOnOrderCreate(w, r, &req) {
+		return
+	}
 
 	// 비유: management_category 미입력이면 기본값 "sale" 설정
 	if req.ManagementCategory == "" {
@@ -550,6 +631,9 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 // 비유: 기존 주문서의 내용을 수정하는 것
 func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOrderOr404(w, r, id) {
+		return
+	}
 
 	var req UpdateOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -659,6 +743,9 @@ type CloneOrderRequest struct {
 // 비유: 같은 거래처가 같은 모델을 또 시켰을 때 옛 주문서를 그대로 베껴 새 주문서를 만드는 것.
 func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOrderOr404(w, r, id) {
+		return
+	}
 
 	var body CloneOrderRequest
 	if r.ContentLength > 0 {
@@ -770,6 +857,9 @@ func (h *OrderHandler) Clone(w http.ResponseWriter, r *http.Request) {
 // 비유: 수주 주문서를 파기하는 것 — 연결된 출고가 있으면 DB FK 제약으로 막힘
 func (h *OrderHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.baroOwnsOrderOr404(w, r, id) {
+		return
+	}
 
 	_, _, err := h.DB.From("orders").
 		Delete("", "").

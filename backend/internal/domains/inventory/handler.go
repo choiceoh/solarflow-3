@@ -7,11 +7,13 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	postgrest "github.com/supabase-community/postgrest-go"
 	supa "github.com/supabase-community/supabase-go"
 
 	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -19,11 +21,30 @@ import (
 // InventoryAllocationHandler — 가용재고 배정 (inventory_allocations) API
 // 비유: "가용재고 예약 데스크" — 판매예정/공사예정으로 재고를 미리 확보
 type InventoryAllocationHandler struct {
-	DB *supa.Client
+	DB          *supa.Client
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 func NewInventoryAllocationHandler(db *supa.Client) *InventoryAllocationHandler {
 	return &InventoryAllocationHandler{DB: db}
+}
+
+// baroForceCompanyFilterOrEmpty — BARO 토큰일 때 query 에 company_id=BR 강제. 룩업 실패 시 ok=false.
+// 호출자는 ok=false 시 빈 결과 반환.
+func (h *InventoryAllocationHandler) baroForceCompanyFilterOrEmpty(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool) {
+	if middleware.GetTenantScope(r.Context()) != middleware.TenantScopeBaro {
+		return query, true
+	}
+	if h.BaroCompany == nil {
+		log.Printf("[BARO 재고배정 격리] BaroCompany resolver 미주입")
+		return query, false
+	}
+	baroID, err := h.BaroCompany.Resolve()
+	if err != nil {
+		log.Printf("[BARO 재고배정 격리] BR 법인 룩업 실패: %v", err)
+		return query, false
+	}
+	return query.Eq(dbschema.InventoryAllocationsColCompanyId, baroID), true
 }
 
 // init — D-20260512-090000 feature self-mounting.
@@ -33,6 +54,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewInventoryAllocationHandler(d.DB)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/inventory/allocations", func(r chi.Router) {
 				r.Get("/", h.List)
@@ -50,7 +72,15 @@ func (h *InventoryAllocationHandler) List(w http.ResponseWriter, r *http.Request
 	query := h.DB.From("inventory_allocations").
 		Select("*", "exact", false)
 
-	if cid := r.URL.Query().Get("company_id"); cid != "" && cid != "all" {
+	// BARO 격리 (D-108): BARO 토큰이면 BR 강제. 룩업 실패 시 빈 결과.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		q2, ok := h.baroForceCompanyFilterOrEmpty(r, query)
+		if !ok {
+			response.RespondJSON(w, http.StatusOK, []map[string]any{})
+			return
+		}
+		query = q2
+	} else if cid := r.URL.Query().Get("company_id"); cid != "" && cid != "all" {
 		query = query.Eq(dbschema.InventoryAllocationsColCompanyId, cid)
 	}
 	if pid := r.URL.Query().Get("product_id"); pid != "" {
