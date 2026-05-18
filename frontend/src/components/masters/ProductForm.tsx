@@ -25,12 +25,12 @@ const PRODUCT_VARIANT_LABEL: Record<string, string> = {
   other: '기타',
 };
 
+// D-160: wattage_kw 는 spec_wp / 1000 의 자동 계산 캐시 — 입력받지 않고 표시만.
 const schema = z.object({
   product_code: z.string().min(1, '품번코드는 필수입니다'),
   product_name: z.string().min(1, '품명은 필수입니다'),
   manufacturer_id: z.string().min(1, '제조사는 필수입니다'),
   spec_wp: z.coerce.number().positive('양수만 가능합니다'),
-  wattage_kw: z.coerce.number().positive('양수만 가능합니다'),
   module_width_mm: z.coerce.number().positive('양수만 가능합니다'),
   module_height_mm: z.coerce.number().positive('양수만 가능합니다'),
   module_depth_mm: z.coerce.number().optional().or(z.literal('')),
@@ -56,7 +56,6 @@ function buildDefaults(editData?: Product | null): ProductFormData {
       product_name: editData.product_name,
       manufacturer_id: editData.manufacturer_id,
       spec_wp: editData.spec_wp,
-      wattage_kw: editData.wattage_kw,
       module_width_mm: editData.module_width_mm,
       module_height_mm: editData.module_height_mm,
       module_depth_mm: editData.module_depth_mm ?? '',
@@ -76,7 +75,7 @@ function buildDefaults(editData?: Product | null): ProductFormData {
   }
   return {
     product_code: '', product_name: '', manufacturer_id: '',
-    spec_wp: '' as unknown as number, wattage_kw: '' as unknown as number,
+    spec_wp: '' as unknown as number,
     module_width_mm: '' as unknown as number, module_height_mm: '' as unknown as number,
     module_depth_mm: '', weight_kg: '',
     wafer_platform: '', cell_config: '', series_name: '',
@@ -134,8 +133,19 @@ function ProductFields({ register, errors, watch, setValue, manufacturers }: Fie
         <FormField label="규격(Wp)" required error={errors.spec_wp?.message}>
           <Input type="number" {...register('spec_wp')} />
         </FormField>
-        <FormField label="용량(kW)" required error={errors.wattage_kw?.message}>
-          <Input type="number" step="0.001" {...register('wattage_kw')} />
+        {/* D-160: 용량(kW) 은 규격(Wp) / 1000 의 자동 계산값 — DB trigger 가 채움. */}
+        {/* eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form watch() — 컴파일러 메모이제이션 불가 */}
+        <FormField label="용량(kW)">
+          <Input
+            type="text"
+            readOnly
+            value={(() => {
+              const sw = Number(watch('spec_wp'));
+              return Number.isFinite(sw) && sw > 0 ? (sw / 1000).toFixed(3) : '';
+            })()}
+            className="bg-muted text-muted-foreground"
+            placeholder="규격(Wp) 입력 시 자동 계산"
+          />
         </FormField>
       </div>
       <div className="grid grid-cols-2 gap-3">

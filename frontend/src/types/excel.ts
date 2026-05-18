@@ -113,12 +113,12 @@ export const MANUFACTURER_FIELDS: FieldDef[] = [
 ];
 
 // 품번 필드 — manufacturer는 자연키(name_kr)로 받아 서버 전송 직전에 manufacturer_id로 매핑
+// D-160: wattage_kw 는 DB trigger 가 spec_wp 기반 자동 채움 — 엑셀 입력에서 제외.
 export const PRODUCT_FIELDS: FieldDef[] = [
   { key: 'product_code', label: '품번코드', required: true, type: 'string' },
   { key: 'product_name', label: '품명', required: true, type: 'string' },
   { key: 'manufacturer_name', label: '제조사명', required: true, type: 'string' },
   { key: 'spec_wp', label: '스펙(Wp)', required: true, type: 'number' },
-  { key: 'wattage_kw', label: '와트수(kW)', required: true, type: 'number' },
   { key: 'module_width_mm', label: '모듈폭(mm)', required: true, type: 'number' },
   { key: 'module_height_mm', label: '모듈높이(mm)', required: true, type: 'number' },
   { key: 'module_depth_mm', label: '모듈두께(mm)', required: false, type: 'number' },
