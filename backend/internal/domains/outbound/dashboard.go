@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/response"
 )
 
@@ -175,7 +176,18 @@ func (h *OutboundHandler) tryRPCOutboundsDashboard(r *http.Request) ([]byte, boo
 		return nil, false
 	}
 	args := map[string]any{}
-	if v := q.Get("company_id"); v != "" && v != "all" {
+	// BARO 격리 (D-108): BARO 토큰일 때는 클라이언트 company_id 무시하고 BR 강제.
+	// 룩업 실패 시 RPC fast-path 포기 → fallback Go 경로 (applyOutboundFilters) 가 격리 적용.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			return nil, false
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			return nil, false
+		}
+		args["p_company_id"] = baroID
+	} else if v := q.Get("company_id"); v != "" && v != "all" {
 		args["p_company_id"] = v
 	}
 	if v := q.Get("status"); v != "" {

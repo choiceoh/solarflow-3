@@ -20,6 +20,7 @@ import (
 	"solarflow-backend/internal/engine"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 	"solarflow-backend/internal/rpcutil"
@@ -63,8 +64,9 @@ var errOutboundNotFound = errors.New("outbound not found")
 // Rust 계산엔진 연동 — 출고 저장 전 재고 차감 검증 (가용재고 >= 출고수량)
 // TODO: 그룹 내 거래 — 출고 시 상대 법인 입고 자동 생성.
 type OutboundHandler struct {
-	DB     *supa.Client
-	Engine *engine.EngineClient
+	DB          *supa.Client
+	Engine      *engine.EngineClient
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 type createOutboundRPCRequest struct {
@@ -101,6 +103,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewOutboundHandler(d.DB, d.Engine)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/outbounds", func(r chi.Router) {
 				r.Get("/", h.List)
@@ -561,8 +564,23 @@ func (h *OutboundHandler) applyOutboundWorkQueue(r *http.Request, query *postgre
 
 // applyOutboundFilters — List 와 Summary 가 공유하는 필터 로직.
 // q/manufacturer_id 처리에 추가 DB 호출이 발생할 수 있어 (success bool, err) 시그니처로 빈 결과를 신호한다.
+//
+// BARO 격리 (D-108): BARO 토큰일 때는 클라이언트가 보낸 company_id 를 무시하고 항상 BR
+// 법인으로 강제 필터. company_code='BR' 룩업 실패(마스터 미등록 / DB 에러)는 빈 결과로
+// fail-closed — module 데이터가 한 행도 새지 않도록.
 func (h *OutboundHandler) applyOutboundFilters(r *http.Request, query *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool, error) {
-	if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			log.Printf("[BARO 출고 격리] BaroCompany resolver 미주입 — 핸들러 마운트 점검 필요")
+			return query, false, nil
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			log.Printf("[BARO 출고 격리] BR 법인 룩업 실패 — 빈 결과 반환: %v", err)
+			return query, false, nil
+		}
+		query = query.Eq(dbschema.OutboundsColCompanyId, baroID)
+	} else if compID := r.URL.Query().Get("company_id"); compID != "" && compID != "all" {
 		query = query.Eq(dbschema.OutboundsColCompanyId, compID)
 	}
 	if whID := r.URL.Query().Get("warehouse_id"); whID != "" {

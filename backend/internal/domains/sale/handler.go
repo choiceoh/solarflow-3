@@ -17,6 +17,7 @@ import (
 	"solarflow-backend/internal/dbschema"
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
 )
@@ -54,7 +55,8 @@ var saleSortable = map[string]struct{}{
 // 비유: "판매 전표함" — 출고에 연결된 판매 금액, 세금계산서 정보를 관리
 // Rust 마진/이익률 분석은 /api/v1/calc/margin-analysis 프록시가 담당한다.
 type SaleHandler struct {
-	DB *supa.Client
+	DB          *supa.Client
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 // NewSaleHandler — SaleHandler 생성자
@@ -69,6 +71,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewSaleHandler(d.DB)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/sales", func(r chi.Router) {
 				r.Get("/", h.List)
@@ -191,7 +194,24 @@ func (h *SaleHandler) applySaleFilters(r *http.Request, query *postgrest.FilterB
 	// company_id: sales 직접 컬럼 아님 → sales_with_meta 의 outbound_company_id /
 	// order_company_id (마이그 111) 로 server-side 매칭. 과거 idsByCompany 경로는
 	// 대형 테넌트에서 UUID 수천 개를 URL 로 합쳐 Cloudflare 400 Bad Request 를 받았다.
-	if compID := q.Get("company_id"); compID != "" && compID != "all" {
+	//
+	// BARO 격리 (D-108): BARO 토큰일 때는 클라이언트 company_id 무시하고 BR 강제.
+	// 룩업 실패는 빈 결과로 fail-closed — module 매출이 한 행도 새지 않도록.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			log.Printf("[BARO 매출 격리] BaroCompany resolver 미주입 — 핸들러 마운트 점검 필요")
+			return query, false, nil
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			log.Printf("[BARO 매출 격리] BR 법인 룩업 실패 — 빈 결과 반환: %v", err)
+			return query, false, nil
+		}
+		query = query.Or(
+			fmt.Sprintf("outbound_company_id.eq.%s,order_company_id.eq.%s", baroID, baroID),
+			"",
+		)
+	} else if compID := q.Get("company_id"); compID != "" && compID != "all" {
 		query = query.Or(
 			fmt.Sprintf("outbound_company_id.eq.%s,order_company_id.eq.%s", compID, compID),
 			"",

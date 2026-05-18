@@ -11,6 +11,7 @@ import (
 	postgrest "github.com/supabase-community/postgrest-go"
 
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/response"
 )
@@ -101,7 +102,17 @@ func (h *ReceiptHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 func (h *ReceiptHandler) tryRPCReceiptsDashboard(r *http.Request) ([]byte, bool) {
 	q := r.URL.Query()
 	args := map[string]any{}
-	if v := q.Get("company_id"); v != "" && v != "all" {
+	// BARO 격리 (D-108): BARO 토큰일 때 BR 강제. 룩업 실패 시 RPC 포기 → fallback applyReceiptFilters 가 격리.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			return nil, false
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			return nil, false
+		}
+		args["p_company_id"] = baroID
+	} else if v := q.Get("company_id"); v != "" && v != "all" {
 		args["p_company_id"] = v
 	}
 	if v := q.Get("customer_id"); v != "" {
@@ -138,8 +149,22 @@ func (h *ReceiptHandler) tryRPCReceiptsDashboard(r *http.Request) ([]byte, bool)
 }
 
 // applyReceiptFilters — List 의 인라인 필터를 재사용 가능한 형태로 추출.
-func applyReceiptFilters(r *http.Request, q *postgrest.FilterBuilder) *postgrest.FilterBuilder {
-	if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
+// (q, ok) — ok=false 이면 호출자가 빈 결과 즉시 반환해야 함 (BARO 격리 룩업 실패).
+//
+// BARO 격리 (D-108): BARO 토큰일 때 클라이언트 company_id 무시하고 BR 강제.
+func (h *ReceiptHandler) applyReceiptFilters(r *http.Request, q *postgrest.FilterBuilder) (*postgrest.FilterBuilder, bool) {
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			log.Printf("[BARO 수금 격리] BaroCompany resolver 미주입")
+			return q, false
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			log.Printf("[BARO 수금 격리] BR 법인 룩업 실패: %v", err)
+			return q, false
+		}
+		q = q.Eq("company_id", baroID)
+	} else if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
 		q = q.Eq("company_id", companyID)
 	}
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
@@ -152,14 +177,18 @@ func applyReceiptFilters(r *http.Request, q *postgrest.FilterBuilder) *postgrest
 	} else if month := r.URL.Query().Get("month"); month != "" {
 		q = q.Gte("receipt_date", month+"-01").Lt("receipt_date", nextMonthString(month))
 	}
-	return q
+	return q, true
 }
 
 func (h *ReceiptHandler) fetchAllForReceiptDashboard(r *http.Request) ([]model.Receipt, error) {
 	all := make([]model.Receipt, 0, receiptDashChunkSize)
 	for chunk := 0; chunk < receiptDashMaxChunks; chunk++ {
 		q := h.DB.From("receipts").Select("*", "exact", false)
-		q = applyReceiptFilters(r, q)
+		q, ok := h.applyReceiptFilters(r, q)
+		if !ok {
+			// BARO 격리 룩업 실패 — 빈 결과 반환.
+			return all, nil
+		}
 		offset := chunk * receiptDashChunkSize
 		q = q.Range(offset, offset+receiptDashChunkSize-1, "")
 

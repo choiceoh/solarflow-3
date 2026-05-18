@@ -63,6 +63,10 @@ type Deps struct {
 	// authMW 만 적용되고 StudyTenantFence 는 제외) 가 사용한다.
 	// AuthAuthed/AuthPublicAPI 그룹은 router 가 그룹 자체에 미들웨어를 걸어주므로 사용 불필요.
 	AuthMW func(http.Handler) http.Handler
+	// BaroCompany — BARO 토큰일 때 강제 격리할 BR 법인 ID 룩업기 (D-108 격리 강화).
+	// outbound/sale/receipt 등 ERP 공통 핸들러가 GetTenantScope==baro 일 때 company_id 쿼리를
+	// 무시하고 이 ID 로 강제 필터링한다. nil 가능 — 호출 측에서 nil 검사.
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 // HasEngine — Rust 엔진 사용 가능 여부 (CalcProxy 등 conditional 마운트용).

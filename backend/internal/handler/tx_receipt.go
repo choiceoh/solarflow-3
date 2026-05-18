@@ -12,6 +12,7 @@ import (
 
 	"solarflow-backend/internal/feature"
 	"solarflow-backend/internal/handlerutil"
+	"solarflow-backend/internal/middleware"
 	"solarflow-backend/internal/model"
 	"solarflow-backend/internal/mount"
 	"solarflow-backend/internal/response"
@@ -20,7 +21,8 @@ import (
 // ReceiptHandler — 수금(receipts) 관련 API를 처리하는 핸들러
 // 비유: "수금 전표함" — 고객 입금 내역을 관리
 type ReceiptHandler struct {
-	DB *supa.Client
+	DB          *supa.Client
+	BaroCompany *middleware.BaroCompanyResolver
 }
 
 // NewReceiptHandler — ReceiptHandler 생성자
@@ -35,6 +37,7 @@ func init() {
 		Auth: mount.AuthAuthed,
 		Mount: func(d *mount.Deps, r chi.Router) {
 			h := NewReceiptHandler(d.DB)
+			h.BaroCompany = d.BaroCompany
 			g := d.Gates
 			r.Route("/receipts", func(r chi.Router) {
 				r.Get("/", h.List)
@@ -59,7 +62,22 @@ func (h *ReceiptHandler) List(w http.ResponseWriter, r *http.Request) {
 	if custID := r.URL.Query().Get("customer_id"); custID != "" {
 		query = query.Eq("customer_id", custID)
 	}
-	if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
+	// BARO 격리 (D-108): BARO 토큰일 때 클라이언트 company_id 무시하고 BR 강제.
+	// 룩업 실패는 빈 결과로 fail-closed — module 수금 한 행도 새지 않도록.
+	if middleware.GetTenantScope(r.Context()) == middleware.TenantScopeBaro {
+		if h.BaroCompany == nil {
+			log.Printf("[BARO 수금 격리] BaroCompany resolver 미주입")
+			response.RespondJSON(w, http.StatusOK, []model.Receipt{})
+			return
+		}
+		baroID, err := h.BaroCompany.Resolve()
+		if err != nil {
+			log.Printf("[BARO 수금 격리] BR 법인 룩업 실패 — 빈 결과: %v", err)
+			response.RespondJSON(w, http.StatusOK, []model.Receipt{})
+			return
+		}
+		query = query.Eq("company_id", baroID)
+	} else if companyID := r.URL.Query().Get("company_id"); companyID != "" && companyID != "all" {
 		query = query.Eq("company_id", companyID)
 	}
 	// ?start=YYYY-MM-DD&end=YYYY-MM-DD — 날짜 범위 (포함). start 와 end 가 함께 지정되면 month 보다 우선.
