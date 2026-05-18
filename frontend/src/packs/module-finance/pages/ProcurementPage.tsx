@@ -448,6 +448,21 @@ export default function ProcurementPage() {
     })
   }, [lcRows, blRows])
   const lcMaturitySoonCount = lcSummary?.maturity_soon_count ?? lcMaturitySoon.length
+  // 현재 한도 점유 LC (M160 룰): 미상환·미취소 + 연결 BL 중 미래 만기 BL 존재.
+  const lcHeld = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const lcsWithFutureBl = new Set<string>()
+    for (const bl of blRows) {
+      if (bl.lc_id && bl.lc_maturity_date && bl.lc_maturity_date >= today) {
+        lcsWithFutureBl.add(bl.lc_id)
+      }
+    }
+    return lcRows.filter(
+      (lc) => !lc.repaid && lc.status !== "cancelled" && lcsWithFutureBl.has(lc.lc_id),
+    )
+  }, [lcRows, blRows])
+  const lcHeldUsd = useMemo(() => lcHeld.reduce((sum, lc) => sum + (lc.amount_usd ?? 0), 0), [lcHeld])
+  const lcHeldCount = lcHeld.length
   const blActiveCount =
     blSummary?.active_count ??
     blRows.filter((bl) => !["completed", "erp_done"].includes(bl.status)).length
@@ -637,6 +652,16 @@ export default function ProcurementPage() {
             tone: "solar" as const,
             spark: lcOpenSpark,
             metricId: "procurement.lc_total",
+          },
+          {
+            lbl: "현재 개설",
+            v: fmtUsdM(lcHeldUsd),
+            numericValue: lcHeldUsd,
+            formatter: fmtUsdM,
+            u: "M$",
+            sub: `${lcHeldCount}건 · BL 만기 미경과`,
+            tone: "info" as const,
+            metricId: "procurement.lc_held",
           },
           {
             lbl: "개설 금액",
